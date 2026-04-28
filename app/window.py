@@ -13,8 +13,8 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Robot URDF Studio")
-        self.resize(1600, 980)
-        self.setMinimumSize(1400, 900)
+        self.resize(1560, 960)
+        self.setMinimumSize(1480, 840)
 
         central = QWidget()
         layout = QVBoxLayout(central)

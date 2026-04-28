@@ -147,6 +147,14 @@ The `v0.5.x` line is now the stabilization and productization band for the app.
 - The workspace remains launchable and readable in windowed and maximized states
 - The current focus is to finish the known UI/layout/documentation issues before `v0.5.3`
 
+### Current `v0.5.1-v0.5.3` working policy
+- Keep the top navigation cleaner and more product-like, but preserve fast access to the real commands
+- Prefer concise labels, grouped menus, and layered entry points over wider control strips
+- Move non-critical explanatory content out of the main workspace when it can live in menus
+- Keep foldouts and cards compact, but never so compact that they become harder to use
+- Optimize for the “thin slice” approach: each pass should improve clarity without sacrificing operability
+- Treat `v0.5.3` as the stabilization checkpoint for layout, naming, and workflow polish in this band
+
 ## Development rules
 
 - Keep changes minimal unless the user explicitly asks for a broader refactor

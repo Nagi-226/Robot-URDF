@@ -9,7 +9,7 @@ class CadOverviewPanel(QFrame):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("Card")
-        self.setMaximumHeight(34)
+        self.setMaximumHeight(40)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 4, 8, 4)
@@ -41,11 +41,11 @@ class CadOverviewPanel(QFrame):
         self.refresh()
 
     def _toggle_expanded(self, expanded: bool) -> None:
-        self.setMaximumHeight(60 if expanded else 34)
+        self.setMaximumHeight(68 if expanded else 40)
         self.toggle.setText("CAD ▾" if expanded else "CAD ▸")
         self.details.setVisible(expanded)
 
     def refresh(self) -> None:
         bridge = get_ui_bridge()
-        self.status.setText(f"v{bridge.version} · {bridge.readiness} · {bridge.writer} · a{bridge.artifact_count}")
-        self.details.setText(f"e={bridge.edit_summary} · d={bridge.artifact_descriptor_count}")
+        self.status.setText(f"v{bridge.version} · {bridge.readiness} · {bridge.writer} · art={bridge.artifact_count}")
+        self.details.setText(f"edit={bridge.edit_summary} · desc={bridge.artifact_descriptor_count}")

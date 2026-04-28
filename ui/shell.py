@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSlider,
     QSpacerItem,
@@ -32,7 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from robot_model import JointSpec, RobotJoint, RobotLink, RobotModel, ViewState
-from rendering import FakeThreeDViewportBackend, SkeletonViewportBackend, ViewportBackend, ViewportOverlay
+from rendering import FakeThreeDViewportBackend, MeshViewportBackend, SkeletonViewportBackend, ViewportBackend, ViewportOverlay
 from ui.workflow_status import build_workflow_status_snapshot, compare_snapshots
 
 
@@ -352,7 +353,6 @@ class DetailPanel(QFrame):
         self.fields = QTreeWidget()
         self.fields.setHeaderHidden(True)
         self.fields.setMinimumHeight(92)
-        self.fields.setMaximumHeight(120)
 
         self.action_hint = QLabel("Tip: use the tree to inspect URDF structure and workspace resources.")
         self.action_hint.setObjectName("CardBody")
@@ -385,11 +385,9 @@ class ResourcePanel(QFrame):
         self.summary.setWordWrap(True)
         self.resource_list = QListWidget()
         self.resource_list.setMinimumHeight(74)
-        self.resource_list.setMaximumHeight(98)
         self.structure_tree = QTreeWidget()
         self.structure_tree.setHeaderHidden(True)
         self.structure_tree.setMinimumHeight(92)
-        self.structure_tree.setMaximumHeight(120)
         layout.addWidget(title)
         layout.addWidget(self.summary)
         layout.addWidget(self.resource_list)
@@ -453,10 +451,13 @@ class WorkspaceShell(QWidget):
         self._append_log("Workspace ready")
 
     def _build_left_panel(self) -> QWidget:
+        scroll = QScrollArea()
+        scroll.setObjectName("SidePanel")
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setMinimumWidth(280)
+
         panel = QFrame()
-        panel.setObjectName("SidePanel")
-        panel.setMaximumWidth(320)
-        panel.setMinimumWidth(280)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(6)
@@ -472,7 +473,7 @@ class WorkspaceShell(QWidget):
         self.recent_list = QListWidget()
         self.recent_list.addItems(RECENT_PROJECTS)
         self.recent_list.itemDoubleClicked.connect(self._open_recent_project)
-        self.recent_list.setMaximumHeight(88)
+        self.recent_list.setMinimumHeight(60)
         layout.addWidget(self.recent_list)
 
         browse_row = QHBoxLayout()
@@ -495,7 +496,6 @@ class WorkspaceShell(QWidget):
         self.project_tree.setHeaderHidden(True)
         self.project_tree.itemClicked.connect(self._tree_clicked)
         self.project_tree.setMinimumHeight(120)
-        self.project_tree.setMaximumHeight(170)
         layout.addWidget(self.project_tree, 1)
 
         self.detail_panel = DetailPanel()
@@ -514,8 +514,10 @@ class WorkspaceShell(QWidget):
 
         layout.addWidget(ConsoleCard("Links", "Serial, CAN, and TCP status."))
         layout.addWidget(ConsoleCard("Workflow", "Planning, logs, flashing, and test execution."))
-        layout.addItem(QSpacerItem(20, 16, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
-        return panel
+        layout.addItem(QSpacerItem(20, 16, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum))
+
+        scroll.setWidget(panel)
+        return scroll
 
     def _build_right_panel(self) -> QWidget:
         panel = QFrame()
@@ -693,6 +695,34 @@ class WorkspaceShell(QWidget):
             }
             #CardTitle {
                 font-weight: 700;
+            }
+            QScrollArea#SidePanel {
+                background: rgba(10, 14, 24, 0.94);
+                border: 1px solid rgba(122, 139, 174, 0.24);
+                border-radius: 18px;
+            }
+            QScrollArea#SidePanel > QWidget > QWidget {
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                background: #0f1626;
+                width: 8px;
+                margin: 4px 2px 4px 0;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: #394867;
+                border-radius: 4px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #4a5d82;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
             }
             QListWidget, QLineEdit, QComboBox, QTextEdit, QTreeWidget {
                 background: #0f1626;
@@ -970,9 +1000,9 @@ class WorkspaceShell(QWidget):
 
     def _toggle_viewport_backend(self) -> None:
         if isinstance(self.viewport.backend, SkeletonViewportBackend):
-            self.viewport.set_viewport_backend(FakeThreeDViewportBackend())
+            self.viewport.set_viewport_backend(MeshViewportBackend())
             self.viewport.set_view_mode("3d-shell")
-            self._append_log("Viewport backend: 3D placeholder")
+            self._append_log("Viewport backend: 3D mesh")
         else:
             self.viewport.set_viewport_backend(SkeletonViewportBackend())
             self.viewport.set_view_mode("skeleton")

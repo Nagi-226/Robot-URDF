@@ -28,11 +28,11 @@ class TopNavigationBar(QFrame):
         self.segments: list[QToolButton] = []
         self._build_segment(layout, NavSection("文件", "File"), self._file_menu())
         self._build_segment(layout, NavSection("CAD", "CAD"), self._cad_menu())
-        self._build_segment(layout, NavSection("工作流", "Workflow"), self._workflow_menu())
+        self._build_segment(layout, NavSection("设备", "Device"), self._device_menu())
         self._build_segment(layout, NavSection("视图", "View"), self._view_menu())
         self._build_segment(layout, NavSection("运行", "Run"), self._run_menu())
-        self._build_segment(layout, NavSection("终端", "Terminal"), self._terminal_menu())
-        self._build_segment(layout, NavSection("帮助", "Help"), self._help_menu())
+        self._build_segment(layout, NavSection("日志", "Logs"), self._logs_menu())
+        self._build_segment(layout, NavSection("关于", "About"), self._about_menu())
 
         layout.addStretch(1)
 
@@ -72,16 +72,15 @@ class TopNavigationBar(QFrame):
         edit.addAction("刷新示例")
         return menu
 
-    def _workflow_menu(self) -> QMenu:
+    def _device_menu(self) -> QMenu:
         menu = QMenu(self)
         snapshot = build_workflow_status_snapshot()
         menu.addAction(f"连接: {snapshot.device.connection_state}")
-        telemetry = menu.addMenu(f"遥测: {snapshot.telemetry.heartbeat}")
-        telemetry.addAction("健康状态")
-        telemetry.addAction("电源与温度")
-        device = menu.addMenu("设备控制台")
-        device.addAction("连接设置")
-        device.addAction("命令发送")
+        menu.addAction(f"健康: {snapshot.device.connection_health}")
+        console = menu.addMenu("设备控制台")
+        console.addAction("连接设置")
+        console.addAction("命令发送")
+        console.addAction("重连")
         return menu
 
     def _view_menu(self) -> QMenu:
@@ -96,13 +95,18 @@ class TopNavigationBar(QFrame):
         menu.addAction("刷新快照")
         return menu
 
-    def _terminal_menu(self) -> QMenu:
+    def _logs_menu(self) -> QMenu:
         menu = QMenu(self)
+        workflow = build_workflow_status_snapshot()
+        telemetry = menu.addMenu(f"遥测: {workflow.telemetry_health}")
+        telemetry.addAction("健康状态")
+        telemetry.addAction("电源与温度")
+        menu.addSeparator()
         menu.addAction("打开日志")
         menu.addAction("清空输出")
         return menu
 
-    def _help_menu(self) -> QMenu:
+    def _about_menu(self) -> QMenu:
         menu = QMenu(self)
         menu.addAction("项目说明")
         menu.addAction("版本信息")

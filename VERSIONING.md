@@ -222,6 +222,8 @@ The `v0.5.x` line is a stabilization and productization band. The focus is not t
 - Prefer layered popovers and menus over stacking extra control panels into the center of the app.
 - Validation evidence should come from the real app behavior, not only from static structure or successful imports.
 - If a change improves one surface but clearly harms the main viewport, treat it as incomplete until the layout is rebalanced.
+- Favor concise labels and grouped menus, but do not remove direct access to common actions.
+- Keep product-like naming clear enough for operators without becoming cryptic.
 
 ## v0.5.0 closure
 
