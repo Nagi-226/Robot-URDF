@@ -63,7 +63,7 @@ Treat the product as evolving from `v0.0.1` upward using a milestone-based versi
 ### Current tracked version
 
 - **Current version:** `v0.5.0`
-- **Reason:** the app has a stable desktop shell, URDF import/parsing, unified robot model abstractions, a viewport backend protocol, the CAD runway is visible in the main UI, the CAD editing demo and export/report bridge are in place, CAD-to-robot workflow linkage is established, and telemetry/device snapshot linkage has been validated in the live workflow path
+- **Reason:** the app has a stable desktop shell, URDF import/parsing, unified robot model abstractions, a viewport backend protocol, the CAD runway is visible in the main UI, the CAD editing demo and export/report bridge are in place, CAD-to-robot workflow linkage is established, telemetry/device snapshot linkage has been validated in the live workflow path, and the top navigation has been reorganized toward a horizontal command surface
 - **Reference:** detailed milestone mapping lives in `VERSIONING.md`
 
 ## Current implementation state
@@ -71,6 +71,7 @@ Treat the product as evolving from `v0.0.1` upward using a milestone-based versi
 - Entry point: `main.py`
 - Application bootstrap: `app/main.py`
 - Main window shell: `app/window.py`
+- Top navigation / command surface: `ui/top_nav.py`
 - Workspace UI: `ui/shell.py`
 - CAD overview panel: `ui/cad_panel.py` (overview-only integration into the main window)
 - CAD workflow link panel: `ui/cad_workspace.py`
@@ -89,6 +90,8 @@ Treat the product as evolving from `v0.0.1` upward using a milestone-based versi
 - Serial connection scaffold and command send field
 - Workflow snapshot bridge for device-console and telemetry state
 - CAD layer with full runway stack: handles, part scripts, export plans, topology, script generation, @cad conventions, feature editors, demo pipeline, report/summary, UI bridge, checklist, readiness checks, pipeline CLI, overview-only UI integration, edit demo, artifact descriptors, CAD-to-robot interop snapshot, and workflow link panel
+- Horizontal top navigation for grouped commands and layered menus
+- Responsive layout safeguards to keep the workspace usable when not maximized
 
 ## Stability-first development strategy
 
@@ -130,17 +133,19 @@ Keep dependencies pointing inward. UI can depend on robot logic, rendering abstr
 10. Prepare Windows packaging and launcher assets
 11. Produce a desktop `exe` with a repeatable build script for Win11
 
-## v0.5.0 execution summary
+## v0.5.x execution summary
 
-The `v0.5.0` line is now the first version where the CAD runway and the workflow surface are both meaningfully integrated into the product.
+The `v0.5.x` line is now the stabilization and productization band for the app.
 
-### Completed v0.5.0 outcomes
+### Completed and active v0.5.x outcomes
 - CAD overview remains stable and read-only in the main UI
 - CAD edit demo, artifact descriptors, and UI bridge/report layering are in place
 - CAD-to-robot workflow linkage is represented through a lightweight interop snapshot
 - Device-console and telemetry state are driven through a shared workflow snapshot model
 - Snapshot delta updates have been validated for connection and telemetry transitions
-- The product remains stable and launchable while preserving the robot workspace as the primary interactive area
+- The top navigation is now a horizontal, non-invasive command surface
+- The workspace remains launchable and readable in windowed and maximized states
+- The current focus is to finish the known UI/layout/documentation issues before `v0.5.3`
 
 ## Development rules
 
@@ -157,6 +162,36 @@ The `v0.5.0` line is now the first version where the CAD runway and the workflow
 - The CAD overview in the main UI is overview-only unless a separate editor surface is intentionally introduced later
 - If a proposed change blurs the boundary between overview, bridge, readiness, pipeline, and editor responsibilities, stop and review before implementation
 
+## AI coding behavioral guidelines
+
+These guidelines complement the `karpathy-guidelines` plugin (from `andrej-karpathy-skills`). The plugin provides the canonical behavioral rules; this section adapts them to the project's specific engineering context.
+
+### 1. Think before coding
+
+- If a request is ambiguous, surface the ambiguity — don't silently pick an interpretation
+- When touching CAD geometry, robot kinematics, or URDF parsing, state assumptions about units, coordinate frames, and joint conventions before writing code
+- If a proposed change could affect the app's ability to launch, flag it before implementing
+
+### 2. Simplicity first
+
+- This is already encoded in the Stability-first development strategy — prefer the smallest change that moves the product forward
+- No new abstractions without a concrete use case in the current task
+- If a change starts to exceed the scope of a thin vertical slice, pause and ask whether it can be split
+
+### 3. Surgical changes
+
+- Don't reformat, restyle, or "improve" code adjacent to the change you're making
+- Match the existing style of each file, even if it differs from other files in the project
+- Remove imports/variables/functions that YOUR changes made unused, but don't remove pre-existing dead code unless asked
+- If you notice an unrelated issue, mention it — don't fix it without asking
+
+### 4. Goal-driven execution
+
+- Before implementing, confirm what "done" looks like with verifiable criteria
+- For bugs: reproduce first, then fix — never fix without confirming the bug exists
+- For features: define acceptance criteria before writing code
+- Keep the app launchable at every intermediate step
+
 ## UI direction
 
 The target UI should feel like a professional engineering cockpit:
@@ -168,6 +203,8 @@ The target UI should feel like a professional engineering cockpit:
 - Fast access to robot controls, logs, and CAD/model tools
 - Win11-friendly sizing and window behavior
 - A central viewport that can evolve into a real CAD/robot 3D stage
+- Horizontal top command bar with layered menus instead of stacked control strips
+- Popover-style command groups that keep the main workspace clear
 
 ## Code quality expectations
 
@@ -188,4 +225,4 @@ Before making larger changes, first ask:
 
 ## Next best steps
 
-The safest next step after v0.5.0 is to keep stabilizing the product with small verification-oriented changes only when a real issue or concrete gap appears. Avoid broad refactors until the next major capability need is explicit.
+The safest next step after `v0.5.0` is to keep stabilizing the product with small verification-oriented changes only when a real issue or concrete gap appears. Avoid broad refactors until the next major capability need is explicit.

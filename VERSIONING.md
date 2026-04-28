@@ -22,10 +22,50 @@ Reasoning:
 - The app already has a runnable Windows desktop shell
 - URDF import, parsing, and robot model abstractions are in place
 - The viewport backend architecture is stable
-- The CAD runway is integrated into the main UI as a read-only overview panel
+- The CAD runway is integrated into the main UI as a read-only overview panel and a compact workflow surface
 - The CAD UI bridge surfaces stable overview fields for version, readiness, writer, artifact count, written artifact count, edit summary, topology nodes, and artifact descriptor count
 - The project now has a CAD-to-robot interop snapshot layer, and the workflow surface now shows telemetry and device-console state, with the snapshot linkage validated in basic command/connection transitions
-- The product remains stable and launchable while preserving the robot workspace as the primary interactive area
+- The top-level shell has been reorganized to keep the main workspace primary while moving CAD/workflow controls into a horizontal command bar
+
+## v0.5.x overall goals
+
+The `v0.5.x` line is a stabilization and productization band. The focus is not to add broad new features, but to harden the current workflow so the app feels coherent in windowed use, maximized use, and future packaging use.
+
+### Main goals
+
+- Keep the main workspace visually primary and readable at all sizes
+- Keep CAD controls as lightweight command surfaces, not oversized content panels
+- Keep telemetry and device-console state aligned through a shared snapshot model
+- Keep CAD-to-robot linkage lightweight and inspectable
+- Reduce layout debt before broadening functionality again
+- Improve documentation and memory so future changes do not reintroduce the same UI problems
+
+### Known problem clusters to finish before `v0.5.3`
+
+1. **Top navigation clarity**
+   - The command bar should stay compact and horizontal
+   - Menu labels should remain predictable and not crowd the workspace
+   - The nav should feel like a control strip, not a second dashboard
+
+2. **Workspace responsiveness**
+   - The main center workspace must remain the visual anchor
+   - The app should hold up in both windowed and maximized modes
+   - Side panels and top bars should not squeeze the viewport into an awkward narrow column
+
+3. **CAD foldout behavior**
+   - CAD overview and workflow entries should stay lightweight by default
+   - Expanded details should remain optional and non-invasive
+   - Foldouts should preserve readability and not consume too much vertical space
+
+4. **Telemetry snapshot quality**
+   - Connection state should remain clear and explicit
+   - Telemetry health should be derived from the snapshot model, not ad hoc UI text
+   - Delta updates should stay useful and not become noisy
+
+5. **Documentation consistency**
+   - `README.md` should remain bilingual and current
+   - `CLAUDE.md` should reflect the actual release line and the latest guardrails
+   - Version notes should match implementation reality, not wishful planning
 
 ## Milestones
 
@@ -147,35 +187,44 @@ Reasoning:
 - Finalize v0.4.x stability before entering the next capability band
 
 ### v0.5.0
-- CAD editing workflow maturity
-- Robot/CAD interop polish
-- Device-console and telemetry refinement
-- Interop snapshot validation in UI and workflow terms
-- Current release line is considered complete and stable enough to begin the next planning cycle
+- Establish the horizontal top navigation and compact command surface
+- Keep the CAD/workflow surfaces lightweight and non-invasive
+- Finalize the shared telemetry/device snapshot model
+- Keep the main workspace readable in both windowed and maximized layouts
+
+### v0.5.1 planned
+- Refine top navigation spacing, labels, and menu behavior
+- Reduce visual compression in the side panels
+- Tighten foldout behavior for CAD overview/workflow entries
+- Audit the app for layout regressions at narrower window sizes
+
+### v0.5.2 planned
+- Improve telemetry presentation and snapshot clarity
+- Reduce noisy state transitions and make device status more legible
+- Ensure CAD/telemetry commands feel coherent under repeated use
+- Finish documentation alignment and remove outdated version wording
+
+### v0.5.3 planned
+- Final stabilization pass for the `v0.5.x` line
+- Close the remaining UI debt identified in the `v0.5.0` to `v0.5.2` band
+- Confirm the app is stable enough for the next capability cycle
 
 ### v1.0.0 planned
 - Production-ready Windows desktop release
 - Repeatable build, packaging, and direct exe delivery
 
-## v0.4.x execution guardrails
+## v0.5.x guardrails
 
-- The CAD overview in the main UI stays overview-only until a dedicated editor surface is intentionally introduced.
-- Pipeline, summary, readiness, and bridge responsibilities stay separate.
-- Any new CAD editing surface must be a separate UI area, not an expansion of the overview panel.
-- Robot workspace remains the primary interactive area until the CAD editor is explicitly promoted.
-- If a proposed change blurs these boundaries, stop and review before implementation.
-
-## v0.5.0 prerequisite guardrails
-
-- Do not declare v0.5.0 complete until the device-console and telemetry refinements are implemented and validated.
-- The CAD-to-robot interop layer should remain a lightweight snapshot/adapter until the workflow proves stable.
-- UI changes in this phase should prefer incremental surface additions over refactors of the workspace shell.
-- If workflow signals or connectivity state are surfaced, ensure they are derived from a consistent snapshot model rather than ad hoc UI state.
-- Telemetry updates must preserve connection state clarity and not silently rewrite the robot workspace into a control application.
+- The top navigation must remain a horizontal, non-invasive command surface.
+- CAD/workflow controls should not compete with the main workspace for vertical space.
+- The workspace must remain resizable and readable at non-maximized window sizes.
+- Typography, spacing, and panel sizing must remain legible on full-screen and windowed layouts.
+- Prefer layered popovers and menus over stacking extra control panels into the center of the app.
 - Validation evidence should come from the real app behavior, not only from static structure or successful imports.
+- If a change improves one surface but clearly harms the main viewport, treat it as incomplete until the layout is rebalanced.
 
-## v0.5.0-pre closure
+## v0.5.0 closure
 
 - The telemetry/device snapshot chain has been validated with delta updates and interop snapshots.
-- The project has entered a stable closed state for this release line.
+- The project has entered a stable release band, but the `v0.5.x` line still has explicit refinement targets before `v0.5.3`.
 - Avoid broad refactors until the next major capability need is clearly identified.

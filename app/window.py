@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QMainWindow, QStatusBar, QTextEdit, QWidget, QVBox
 from ui.cad_panel import CadOverviewPanel
 from ui.cad_workspace import CadWorkflowPanel
 from ui.shell import WorkspaceShell
+from ui.top_nav import TopNavigationBar
 
 
 class MainWindow(QMainWindow):
@@ -13,21 +14,24 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Robot URDF Studio")
         self.resize(1600, 980)
+        self.setMinimumSize(1400, 900)
 
         central = QWidget()
         layout = QVBoxLayout(central)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(4)
 
+        self.top_nav = TopNavigationBar()
         self.workspace = WorkspaceShell()
         self.cad_overview = CadOverviewPanel()
         self.cad_workflow = CadWorkflowPanel()
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
-        self.log_view.setMaximumHeight(180)
+        self.log_view.setMaximumHeight(72)
         self.log_view.setPlaceholderText("Event log and telemetry output")
 
         self.workspace.set_log_sink(self.log_view)
+        layout.addWidget(self.top_nav, 0)
         layout.addWidget(self.cad_overview, 0)
         layout.addWidget(self.cad_workflow, 0)
         layout.addWidget(self.workspace, 1)

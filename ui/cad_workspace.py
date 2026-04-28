@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from cad.interop import build_interop_snapshot
 
@@ -9,34 +9,43 @@ class CadWorkflowPanel(QFrame):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("Card")
+        self.setMaximumHeight(34)
+
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(8)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(2)
 
-        title = QLabel("CAD workflow link")
-        title.setObjectName("CardTitle")
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+
+        self.toggle = QPushButton("Workflow ▸")
+        self.toggle.setObjectName("CompactToggle")
+        self.toggle.setCheckable(True)
+        self.toggle.toggled.connect(self._toggle_expanded)
+
         self.summary = QLabel("")
-        self.summary.setWordWrap(True)
         self.summary.setObjectName("CardBody")
-        self.details = QLabel("")
-        self.details.setWordWrap(True)
-        self.details.setObjectName("CardBody")
-        self.telemetry_hint = QLabel("")
-        self.telemetry_hint.setWordWrap(True)
-        self.telemetry_hint.setObjectName("CardBody")
+        self.summary.setWordWrap(False)
 
-        layout.addWidget(title)
-        layout.addWidget(self.summary)
+        row.addWidget(self.toggle, 0)
+        row.addWidget(self.summary, 1)
+        layout.addLayout(row)
+
+        self.details = QLabel("")
+        self.details.setObjectName("CardBody")
+        self.details.setWordWrap(False)
+        self.details.setVisible(False)
         layout.addWidget(self.details)
-        layout.addWidget(self.telemetry_hint)
+
         self.refresh()
+
+    def _toggle_expanded(self, expanded: bool) -> None:
+        self.setMaximumHeight(60 if expanded else 34)
+        self.toggle.setText("Workflow ▾" if expanded else "Workflow ▸")
+        self.details.setVisible(expanded)
 
     def refresh(self) -> None:
         snapshot = build_interop_snapshot()
-        self.summary.setText(
-            f"CAD version {snapshot.cad_version} | readiness={snapshot.cad_readiness} | writer={snapshot.cad_writer} | artifacts={snapshot.cad_artifacts} | written={snapshot.cad_written_artifacts}"
-        )
-        self.details.setText(
-            f"edit summary={snapshot.cad_edit_summary} | topology nodes={snapshot.cad_topology_nodes} | descriptors={snapshot.cad_artifact_descriptors}"
-        )
-        self.telemetry_hint.setText("Telemetry bridge uses a stable snapshot model before direct device integration.")
+        self.summary.setText(f"v{snapshot.cad_version} · {snapshot.cad_readiness} · {snapshot.cad_writer}")
+        self.details.setText(f"a{snapshot.cad_artifacts} · w{snapshot.cad_written_artifacts} · t{snapshot.cad_topology_nodes} · d{snapshot.cad_artifact_descriptors}")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from cad.ui_bridge import get_ui_bridge
 
@@ -9,37 +9,43 @@ class CadOverviewPanel(QFrame):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("Card")
+        self.setMaximumHeight(34)
+
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(8)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(2)
 
-        title = QLabel("CAD runway overview")
-        title.setObjectName("CardTitle")
-        self.summary = QLabel("")
-        self.summary.setWordWrap(True)
-        self.summary.setObjectName("CardBody")
-        self.report = QLabel("")
-        self.report.setWordWrap(True)
-        self.report.setObjectName("CardBody")
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+
+        self.toggle = QPushButton("CAD ▸")
+        self.toggle.setObjectName("CompactToggle")
+        self.toggle.setCheckable(True)
+        self.toggle.toggled.connect(self._toggle_expanded)
+
         self.status = QLabel("")
-        self.status.setWordWrap(True)
         self.status.setObjectName("CardBody")
-        self.scope = QLabel("Scope: overview only, no control actions")
-        self.scope.setWordWrap(True)
-        self.scope.setObjectName("CardBody")
+        self.status.setWordWrap(False)
 
-        layout.addWidget(title)
-        layout.addWidget(self.summary)
-        layout.addWidget(self.report)
-        layout.addWidget(self.status)
-        layout.addWidget(self.scope)
+        row.addWidget(self.toggle, 0)
+        row.addWidget(self.status, 1)
+        layout.addLayout(row)
+
+        self.details = QLabel("")
+        self.details.setObjectName("CardBody")
+        self.details.setWordWrap(False)
+        self.details.setVisible(False)
+        layout.addWidget(self.details)
+
         self.refresh()
+
+    def _toggle_expanded(self, expanded: bool) -> None:
+        self.setMaximumHeight(60 if expanded else 34)
+        self.toggle.setText("CAD ▾" if expanded else "CAD ▸")
+        self.details.setVisible(expanded)
 
     def refresh(self) -> None:
         bridge = get_ui_bridge()
-        lines = bridge.as_lines()
-        self.summary.setText("\n".join(lines))
-        self.report.setText(bridge.report.splitlines()[0] if bridge.report else "")
-        self.status.setText(
-            f"version={bridge.version} | ready={bridge.ready} | readiness={bridge.readiness} | writer={bridge.writer} | artifacts={bridge.artifact_count} | written={bridge.written_artifact_count} | edits={bridge.edit_summary} | descriptors={bridge.artifact_descriptor_count} | topology_nodes={bridge.topology_nodes}"
-        )
+        self.status.setText(f"v{bridge.version} · {bridge.readiness} · {bridge.writer} · a{bridge.artifact_count}")
+        self.details.setText(f"e={bridge.edit_summary} · d={bridge.artifact_descriptor_count}")

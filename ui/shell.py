@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from functools import partial
 from pathlib import Path
 from typing import Iterable
 
@@ -34,7 +33,7 @@ from PySide6.QtWidgets import (
 
 from robot_model import JointSpec, RobotJoint, RobotLink, RobotModel, ViewState
 from rendering import FakeThreeDViewportBackend, SkeletonViewportBackend, ViewportBackend, ViewportOverlay
-from ui.workflow_status import build_workflow_status_snapshot, compare_snapshots, WorkflowStatusSnapshot
+from ui.workflow_status import build_workflow_status_snapshot, compare_snapshots
 
 
 RECENT_PROJECTS = ["AtlasArm / production-cell-01", "DeltaBot / calibration-suite", "FieldRig / embedded-testbench"]
@@ -45,7 +44,6 @@ RESOURCE_SUFFIXES = {".stl", ".dae", ".obj", ".step", ".stp", ".json", ".yaml", 
 
 
 def _infer_selection_kind(text: str) -> str:
-    """Classify a tree item label into a selection kind."""
     lowered = text.lower()
     if lowered.startswith("urdf:"):
         return "urdf"
@@ -97,7 +95,7 @@ JOINT_SPECS: list[JointSpec] = [
 
 
 class JointSlider(QWidget):
-    _SLIDER_SCALE = 100  # preserve 2 decimal places on the integer slider
+    _SLIDER_SCALE = 100
 
     def __init__(self, name: str, minimum: float, maximum: float, value: float) -> None:
         super().__init__()
@@ -157,7 +155,7 @@ class RobotViewport(QFrame):
         self.model_path = "No model loaded"
         self.backend: ViewportBackend = SkeletonViewportBackend()
         self._overlay = ViewportOverlay(title=self.robot_name, subtitle="No model loaded")
-        self.setMinimumSize(900, 620)
+        self.setMinimumSize(820, 560)
         self.setFrameShape(QFrame.Shape.StyledPanel)
 
         self._scene_layout = QVBoxLayout()
@@ -301,8 +299,8 @@ class ConsoleCard(QFrame):
         super().__init__()
         self.setObjectName("Card")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(8)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(4)
         label = QLabel(title)
         label.setObjectName("CardTitle")
         text = QLabel(body)
@@ -317,8 +315,8 @@ class OverviewBanner(QFrame):
         super().__init__()
         self.setObjectName("Banner")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(8)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(4)
         self.title = QLabel("Robot URDF Studio")
         self.title.setObjectName("BannerTitle")
         self.subtitle = QLabel("Industrial workbench for robot models, device control, and packaging-ready Win11 delivery.")
@@ -326,7 +324,7 @@ class OverviewBanner(QFrame):
         self.subtitle.setObjectName("BannerSubtitle")
         chip_row = QHBoxLayout()
         self.chips: list[QLabel] = []
-        for text in ["URDF import", "link/joint tree", "device console", "exe-ready path"]:
+        for text in ["URDF", "CAD", "I/O", "packaging"]:
             chip = QLabel(text)
             chip.setObjectName("BannerChip")
             self.chips.append(chip)
@@ -342,8 +340,8 @@ class DetailPanel(QFrame):
         super().__init__()
         self.setObjectName("Card")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(8)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(4)
 
         title = QLabel("Selection details")
         title.setObjectName("CardTitle")
@@ -353,7 +351,8 @@ class DetailPanel(QFrame):
 
         self.fields = QTreeWidget()
         self.fields.setHeaderHidden(True)
-        self.fields.setMinimumHeight(180)
+        self.fields.setMinimumHeight(92)
+        self.fields.setMaximumHeight(120)
 
         self.action_hint = QLabel("Tip: use the tree to inspect URDF structure and workspace resources.")
         self.action_hint.setObjectName("CardBody")
@@ -376,8 +375,8 @@ class ResourcePanel(QFrame):
         super().__init__()
         self.setObjectName("Card")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(8)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(4)
 
         title = QLabel("URDF resources")
         title.setObjectName("CardTitle")
@@ -385,10 +384,12 @@ class ResourcePanel(QFrame):
         self.summary.setObjectName("CardBody")
         self.summary.setWordWrap(True)
         self.resource_list = QListWidget()
-        self.resource_list.setMinimumHeight(120)
+        self.resource_list.setMinimumHeight(74)
+        self.resource_list.setMaximumHeight(98)
         self.structure_tree = QTreeWidget()
         self.structure_tree.setHeaderHidden(True)
-        self.structure_tree.setMinimumHeight(160)
+        self.structure_tree.setMinimumHeight(92)
+        self.structure_tree.setMaximumHeight(120)
         layout.addWidget(title)
         layout.addWidget(self.summary)
         layout.addWidget(self.resource_list)
@@ -436,8 +437,8 @@ class WorkspaceShell(QWidget):
         self.workflow_snapshot = build_workflow_status_snapshot()
 
         root = QHBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(16)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(8)
 
         self.left_panel = self._build_left_panel()
         self.viewport = RobotViewport()
@@ -454,44 +455,47 @@ class WorkspaceShell(QWidget):
     def _build_left_panel(self) -> QWidget:
         panel = QFrame()
         panel.setObjectName("SidePanel")
-        panel.setMaximumWidth(400)
-        panel.setMinimumWidth(350)
+        panel.setMaximumWidth(320)
+        panel.setMinimumWidth(280)
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(14)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
 
         banner = OverviewBanner()
         layout.addWidget(banner)
 
-        layout.addWidget(ConsoleCard("Project", "Load robot assets, recent workspaces, and build targets."))
+        layout.addWidget(ConsoleCard("Project", "Load assets, workspace folders, and build targets."))
 
-        recent_label = QLabel("Recent projects")
+        recent_label = QLabel("Recent")
         recent_label.setObjectName("SectionTitle")
         layout.addWidget(recent_label)
         self.recent_list = QListWidget()
         self.recent_list.addItems(RECENT_PROJECTS)
         self.recent_list.itemDoubleClicked.connect(self._open_recent_project)
+        self.recent_list.setMaximumHeight(88)
         layout.addWidget(self.recent_list)
 
         browse_row = QHBoxLayout()
         self.workspace_path = QLineEdit()
-        self.workspace_path.setPlaceholderText("Workspace path or project folder")
+        self.workspace_path.setPlaceholderText("Workspace path")
         browse_btn = QPushButton("Browse")
         browse_btn.clicked.connect(self.browse_workspace)
         browse_row.addWidget(self.workspace_path, 1)
         browse_row.addWidget(browse_btn)
         layout.addLayout(browse_row)
 
-        open_btn = QPushButton("Open workspace")
+        open_btn = QPushButton("Open")
         open_btn.clicked.connect(self._open_workspace)
         layout.addWidget(open_btn)
 
-        tree_label = QLabel("Project tree")
+        tree_label = QLabel("Tree")
         tree_label.setObjectName("SectionTitle")
         layout.addWidget(tree_label)
         self.project_tree = QTreeWidget()
         self.project_tree.setHeaderHidden(True)
         self.project_tree.itemClicked.connect(self._tree_clicked)
+        self.project_tree.setMinimumHeight(120)
+        self.project_tree.setMaximumHeight(170)
         layout.addWidget(self.project_tree, 1)
 
         self.detail_panel = DetailPanel()
@@ -501,26 +505,26 @@ class WorkspaceShell(QWidget):
 
         urdf_row = QHBoxLayout()
         self.urdf_path = QLineEdit()
-        self.urdf_path.setPlaceholderText("URDF or Xacro file")
-        import_btn = QPushButton("Import URDF")
+        self.urdf_path.setPlaceholderText("URDF / Xacro")
+        import_btn = QPushButton("Import")
         import_btn.clicked.connect(self.import_urdf)
         urdf_row.addWidget(self.urdf_path, 1)
         urdf_row.addWidget(import_btn)
         layout.addLayout(urdf_row)
 
-        layout.addWidget(ConsoleCard("Device links", "Serial, CAN, and TCP adapters with status-aware connection handling."))
-        layout.addWidget(ConsoleCard("Workflow", "Planning, logs, flashing, and test execution panels."))
-        layout.addItem(QSpacerItem(20, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+        layout.addWidget(ConsoleCard("Links", "Serial, CAN, and TCP status."))
+        layout.addWidget(ConsoleCard("Workflow", "Planning, logs, flashing, and test execution."))
+        layout.addItem(QSpacerItem(20, 16, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
         return panel
 
     def _build_right_panel(self) -> QWidget:
         panel = QFrame()
         panel.setObjectName("SidePanel")
-        panel.setMaximumWidth(450)
-        panel.setMinimumWidth(380)
+        panel.setMaximumWidth(390)
+        panel.setMinimumWidth(320)
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(12)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
         header = QLabel("Joint control")
         header.setObjectName("PanelTitle")
@@ -536,20 +540,20 @@ class WorkspaceShell(QWidget):
         row = QHBoxLayout()
         for preset in POSES:
             btn = QPushButton(preset.name)
-            btn.clicked.connect(partial(self.apply_pose, preset))
+            btn.clicked.connect(lambda _=False, p=preset: self.apply_pose(p))
             row.addWidget(btn)
         layout.addLayout(row)
 
         actions = QHBoxLayout()
         reset_btn = QPushButton("Reset")
         reset_btn.clicked.connect(self.reset_pose)
-        copy_btn = QPushButton("Copy angles")
+        copy_btn = QPushButton("Copy")
         copy_btn.clicked.connect(self.copy_angles)
         actions.addWidget(reset_btn)
         actions.addWidget(copy_btn)
         layout.addLayout(actions)
 
-        toggle_btn = QPushButton("Toggle 3D / Skeleton")
+        toggle_btn = QPushButton("2D / 3D")
         toggle_btn.clicked.connect(self._toggle_viewport_backend)
         layout.addWidget(toggle_btn)
 
@@ -558,22 +562,22 @@ class WorkspaceShell(QWidget):
         self.tabs.addTab(self._build_io_tab(), "I/O")
         self.tabs.addTab(self._build_tasks_tab(), "Tasks")
         layout.addWidget(self.tabs)
-        layout.addItem(QSpacerItem(20, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+        layout.addItem(QSpacerItem(20, 12, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
         return panel
 
     def _build_runtime_tab(self) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(10)
-        layout.addWidget(ConsoleCard("Telemetry", "Joint states, temperature, supply voltage, and heartbeat monitoring."))
-        layout.addWidget(ConsoleCard("Planner", "Path preview, sequence queue, and motion validation."))
+        layout.setSpacing(6)
+        layout.addWidget(ConsoleCard("Telemetry", "Joint states, temperature, voltage, heartbeat."))
+        layout.addWidget(ConsoleCard("Planner", "Path preview, queue, and motion validation."))
         return widget
 
     def _build_io_tab(self) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(10)
-        layout.addWidget(ConsoleCard("Serial", "Auto-detect COM ports, baud selection, reconnect, and log capture."))
+        layout.setSpacing(6)
+        layout.addWidget(ConsoleCard("Serial", "COM ports, baud rate, reconnect, and log capture."))
 
         io_row = QHBoxLayout()
         self.port_combo = QComboBox()
@@ -598,49 +602,70 @@ class WorkspaceShell(QWidget):
         layout.addWidget(self.connection_state)
 
         self.command_box = QLineEdit()
-        self.command_box.setPlaceholderText("Send command to controller, e.g. ping")
+        self.command_box.setPlaceholderText("Send command, e.g. ping")
         send_btn = QPushButton("Send")
         send_btn.clicked.connect(self._send_command)
         layout.addWidget(self.command_box)
         layout.addWidget(send_btn)
 
-        self.telemetry_title = QLabel("Telemetry state")
+        self.telemetry_title = QLabel("Telemetry")
         self.telemetry_title.setObjectName("SectionTitle")
         layout.addWidget(self.telemetry_title)
         self.telemetry_box = QTextEdit()
         self.telemetry_box.setReadOnly(True)
-        self.telemetry_box.setMaximumHeight(140)
+        self.telemetry_box.setMaximumHeight(104)
         layout.addWidget(self.telemetry_box)
 
-        layout.addWidget(ConsoleCard("Network", "TCP/UDP bridge support for embedded controllers and simulators."))
-        layout.addWidget(ConsoleCard("Flash", "Future hook for firmware upload and device-specific tooling."))
+        layout.addWidget(ConsoleCard("Network", "TCP/UDP bridge support for controllers and simulators."))
+        layout.addWidget(ConsoleCard("Flash", "Firmware upload and device tooling hooks."))
         self._refresh_workflow_panels()
         return widget
 
     def _build_tasks_tab(self) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(10)
-        layout.addWidget(ConsoleCard("Quick actions", "Open workspace, import URDF, connect device, run checks."))
-        layout.addWidget(ConsoleCard("Logs", "Timestamped event stream designed for copy/paste debugging."))
-        layout.addWidget(ConsoleCard("Status", "Keep operators aware of connection health, errors, and motion state."))
+        layout.setSpacing(6)
+        layout.addWidget(ConsoleCard("Actions", "Open workspace, import URDF, connect device, run checks."))
+        layout.addWidget(ConsoleCard("Logs", "Timestamped event stream for debugging."))
+        layout.addWidget(ConsoleCard("Status", "Connection health, errors, and motion state."))
         return widget
 
     def _apply_style(self) -> None:
         self.setStyleSheet(
             """
+            #TopNav {
+                background: rgba(12, 16, 25, 0.98);
+                border: 1px solid rgba(100, 115, 140, 0.22);
+                border-radius: 12px;
+            }
+            #TopNavButton {
+                min-width: 70px;
+                color: #d9e2f2;
+                background: rgba(26, 35, 54, 0.92);
+                border: 1px solid rgba(104, 118, 145, 0.22);
+                border-radius: 10px;
+                padding: 5px 10px;
+                font-weight: 600;
+            }
+            #TopNavButton::menu-indicator {
+                image: none;
+            }
+            #TopNavSummary {
+                color: #9ca9c0;
+                padding-right: 8px;
+            }
             #SidePanel {
                 background: rgba(10, 14, 24, 0.94);
                 border: 1px solid rgba(122, 139, 174, 0.24);
-                border-radius: 20px;
+                border-radius: 18px;
             }
             #Banner {
                 background: linear-gradient(135deg, rgba(30, 40, 64, 0.96), rgba(14, 19, 31, 0.98));
                 border: 1px solid rgba(154, 168, 198, 0.18);
-                border-radius: 18px;
+                border-radius: 16px;
             }
             #BannerTitle {
-                font-size: 21px;
+                font-size: 18px;
                 font-weight: 800;
                 letter-spacing: 0.4px;
             }
@@ -652,7 +677,7 @@ class WorkspaceShell(QWidget):
                 color: #dce5f7;
                 border: 1px solid rgba(130, 146, 182, 0.25);
                 border-radius: 999px;
-                padding: 4px 10px;
+                padding: 2px 8px;
             }
             #SectionTitle, #MutedLabel, #CardBody {
                 color: #a7b2c9;
@@ -660,11 +685,11 @@ class WorkspaceShell(QWidget):
             #ConnectionState {
                 color: #d6def1;
                 font-weight: 600;
-                padding: 4px 0;
+                padding: 2px 0;
             }
             #Card {
                 background: rgba(20, 28, 44, 0.94);
-                border-radius: 14px;
+                border-radius: 12px;
             }
             #CardTitle {
                 font-weight: 700;
@@ -673,14 +698,14 @@ class WorkspaceShell(QWidget):
                 background: #0f1626;
                 border: 1px solid #394867;
                 border-radius: 10px;
-                padding: 7px 9px;
+                padding: 5px 7px;
                 color: #e6edf8;
             }
             QPushButton {
                 background: #1f2a42;
                 border: 1px solid #40506f;
                 border-radius: 10px;
-                padding: 8px 12px;
+                padding: 7px 10px;
             }
             QPushButton:hover {
                 background: #293753;
@@ -725,9 +750,9 @@ class WorkspaceShell(QWidget):
             """
         )
         shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(24)
-        shadow.setOffset(0, 4)
-        shadow.setColor(QColor(0, 0, 0, 140))
+        shadow.setBlurRadius(18)
+        shadow.setOffset(0, 3)
+        shadow.setColor(QColor(0, 0, 0, 125))
         self.viewport.setGraphicsEffect(shadow)
 
     def set_log_sink(self, sink: QTextEdit) -> None:
@@ -782,10 +807,7 @@ class WorkspaceShell(QWidget):
 
     def _parse_urdf(self, path: Path) -> UrdfModelSummary | None:
         try:
-            parser = ET.XMLParser(target=ET.TreeBuilder())
-            parser.entity = {}
-            tree = ET.parse(path, parser=parser)
-            root = tree.getroot()
+            root = ET.parse(path).getroot()
         except ET.ParseError as exc:
             self._append_log(f"URDF XML parse error: {exc}")
             return None
@@ -930,14 +952,11 @@ class WorkspaceShell(QWidget):
 
     def _tree_clicked(self, item: QTreeWidgetItem) -> None:
         text = item.text(0)
-        kind = self._infer_tree_kind(text)
+        kind = _infer_selection_kind(text)
         self.selection_state = SelectionState(label=text, kind=kind)
         self.viewport.set_selected_item(text)
         self._update_details_from_tree(text)
         self._append_log(f"Tree item selected: {text}")
-
-    def _infer_tree_kind(self, text: str) -> str:
-        return _infer_selection_kind(text)
 
     def _update_details_from_tree(self, text: str) -> None:
         details = [("Selected item", text), ("Category", self.selection_state.kind)]
@@ -965,11 +984,7 @@ class WorkspaceShell(QWidget):
 
     def _refresh_workflow_panels(self) -> None:
         previous = self.workflow_snapshot
-        self.workflow_snapshot = build_workflow_status_snapshot(
-            connection_state=self.workflow_snapshot.device.connection_state,
-            last_command=self.workflow_snapshot.device.last_command,
-            last_error=self.workflow_snapshot.device.last_error,
-        )
+        self.workflow_snapshot = build_workflow_status_snapshot()
         delta = compare_snapshots(previous, self.workflow_snapshot)
         self.connection_state.setText(self.workflow_snapshot.device.connection_state)
         self.telemetry_box.setPlainText("\n".join(self.workflow_snapshot.telemetry_lines() + ([f"delta={delta.note}"] if delta.note else [])))
