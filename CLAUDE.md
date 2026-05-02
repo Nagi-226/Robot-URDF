@@ -62,8 +62,9 @@ Treat the product as evolving from `v0.0.1` upward using a milestone-based versi
 
 ### Current tracked version
 
-- **Current version:** `v0.7.0`
-- **Reason:** v0.6.7 is implemented as a verified URDF mesh viewport slice, and v0.6.8-v0.7.0 production paths are now in place: pick detail reporting, URDF visual meshes in the 3D viewport, FK-based part transforms, primitive fallback mesh generation, multi-light shader uniforms, preset pose tweening, viewport reset/wireframe/screenshot APIs, CAD sample preview mesh bridging, cone/capsule primitives, same-scene CAD+Robot rendering, tree/detail/viewport selection sync, undo/redo viewport refresh, and viewport state persistence
+- **Current version:** `v0.7.0-dev` (v0.7.0 features complete, v0.7.x polish + packaging band active)
+- **Reason:** v0.7.0 delivers integrated 3D workspace with CAD+Robot same-scene rendering, full selection sync across viewport/detail-panel/trees, CPU raycast picking (face/edge/vertex → @cad handle → undo/redo), OpenGL screenshot export, camera presets/wireframe/reset wired to View menu, and viewport state persistence. The v0.7.1–v0.7.9 band is now active, covering UI polish (theme system, typography hierarchy, icon set), PyInstaller exe packaging, performance optimisation, test coverage expansion, and release candidate preparation. See VERSIONING.md for the full v0.7.x detailed development plan.
+- **Reference:** detailed milestone mapping lives in `VERSIONING.md`
 - **Reference:** detailed milestone mapping lives in `VERSIONING.md`
 
 ## Current implementation state

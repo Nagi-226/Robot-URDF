@@ -333,27 +333,193 @@ The `v0.5.x` line is a stabilization and productization band. The focus is not t
 - Per-part `DisplayRecord` data carries visibility, opacity-ready metadata, colors, transforms, and stable part ids.
 - CAD preview meshes participate in the same CPU raycast picking path as URDF meshes.
 
-### v0.7.0 complete - Integrated 3D workspace
+### v0.7.0 complete — Integrated 3D workspace
 - CAD + Robot same-scene rendering is active in `MeshViewportBackend`.
-- Selection synchronization is wired across viewport, detail panel, and project/URDF trees:
-  - 3D picks update the detail panel.
-  - Tree selections call into the 3D widget highlight hook.
-  - 3D picks try to select the matching tree item when a corresponding link/part exists.
-- CAD pick integration is active:
-  - `PickToHandleMapping` resolves CAD preview face picks to `@cad` handles.
-  - Picked CAD handles are recorded through `EditHistory`.
-  - Undo/redo menu actions refresh the viewport after edit stack changes.
-- Screenshot/export has a real OpenGL framebuffer path through `Mesh3DWidget.export_screenshot()`.
-- Top navigation Export State routes to viewport screenshot export.
-- Reset View, camera presets, and wireframe/solid mode route to real viewport APIs.
-- Viewport camera/display state persists through `studio_io.viewport_state`.
-- Picking production note: v0.7.0 ships the deterministic CPU raycast path for face/edge/vertex/CAD-handle picking; a dedicated GPU color-ID pass remains an optional acceleration layer, not a blocker for the v0.7.0 workbench.
+- Selection synchronization is wired across viewport, detail panel, and project/URDF trees.
+- CAD pick integration: `PickToHandleMapping` → `@cad` handles → `EditHistory` undo/redo.
+- Screenshot export via OpenGL framebuffer (`Mesh3DWidget.export_screenshot()`).
+- View menu: camera presets, wireframe/solid toggle, reset view wired to real APIs.
+- Viewport camera/display state persistence through `studio_io.viewport_state`.
+- All 95 tests pass. CPU raycast picking is the production pick path.
 
-### v1.0.0 planned
-- Production-ready Windows desktop release
-- Repeatable build, packaging, and direct exe delivery
+---
+## v0.7.x detailed development plan — Polish, Packaging, Product
 
-## 3D readiness assessment (v0.6.5 baseline)
+The v0.7.x band transforms the prototype into a polished, packageable Windows 11 desktop product.
+This plan is inspired by the design philosophy skills from Anthropic's **theme-factory** (10 professional
+curated themes), **frontend-design** (BOLD aesthetic direction methodology), **brand-guidelines**
+(cohesive visual identity system), and **canvas-design** (design philosophy → visual expression pipeline).
+
+Each sub-version targets one thin vertical slice and must keep the app launchable with all tests passing.
+
+### 🎨 v0.7.1 — Design philosophy & theme system
+
+**Design philosophy: "Dark Industrial Precision"**
+- Manifesto: A robotic workbench should feel like you could operate it with gloves on.
+  Every pixel communicates intent. No decoration without function.
+  Dark background is not just "dark mode" — it's the natural state of an industrial
+  control surface. Colours are signal, not style.
+
+**Technical deliverables:**
+- Extract QSS into a theme factory module (`assets/themes/`):
+  - `industrial_dark.qss` — current theme, refined
+  - `high_contrast.qss` — accessibility-optimised variant
+  - `compact.qss` — maximised workspace density for power users
+- Theme switching in View menu (alongside language switching)
+- `ThemeManager` class: load, hot-swap, persist preference via `StudioConfig`
+- Font stack: Primary monospace for data (Cascadia Code / JetBrains Mono), Secondary sans-serif for labels (Segoe UI)
+- Accent colour system adapted from brand-guidelines pattern: 3 accent colours cycling through functional zones
+  - Blue accent: robot/model state
+  - Green accent: device/connection state
+  - Orange accent: CAD/editing state
+- All hex colours extracted to named CSS variables in QSS
+
+### 🖌 v0.7.2 — Typography, spacing & visual hierarchy
+
+**Design philosophy applied from frontend-design skill:**
+- **Typography**: Distinctive type hierarchy. Headers in semi-bold uppercase tracking.
+  Data fields in monospace. Labels in condensed sans-serif. Nothing uses default Qt font sizes.
+- **Spatial composition**: Generous negative space around the viewport (the "stage").
+  Tight, dense information in side panels (the "instruments"). Clear visual separation
+  between chrome and content.
+- **Motion**: Staggered panel reveal on first launch. Smooth opacity transitions on
+  tab switches. Subtle hover lift on interactive elements.
+
+**Technical deliverables:**
+- Unified spacing scale (4px grid): `xs=4, sm=8, md=12, lg=16, xl=24, 2xl=32, 3xl=48`
+- Typography scale: `caption=9pt, body=10pt, label=11pt, subtitle=12pt, title=14pt, heading=16pt, hero=20pt`
+- All QSS `padding`, `margin`, `border-radius` migrated to spacing-scale variables
+- All QSS `font-size` migrated to typography-scale variables
+- Panel resize behaviour: smooth QSplitter with minimum size enforcement, no layout jumps
+- Status bar styling: subtle gradient, version chip on the right
+- Tooltip styling: dark glass-morphism with accent-coloured border
+- Scrollbar width, handle colour, and hover states consistent across all scroll areas
+
+### 🧩 v0.7.3 — Icon system & visual chrome
+
+**Technical deliverables:**
+- SVG icon set for all toolbar actions (16px/24px/32px):
+  - File: open, save, export
+  - View: 2d, 3d, reset, zoom-in, zoom-out, wireframe, solid
+  - Device: connect, disconnect, send
+  - Robot: home-pose, play, pause
+- Icon colour inheritance from QSS palette (no hardcoded icon colours)
+- TopNav buttons: icon + text or icon-only with tooltip (configurable)
+- Viewport overlay: semi-transparent HUD in corners showing:
+  - Top-left: model name + joint count
+  - Top-right: FPS counter (toggleable)
+  - Bottom-left: camera mode indicator (orbit/free)
+  - Bottom-right: scale reference
+- Splash screen on cold start (simple logo + version, fades out after 1.5s)
+- Application icon (.ico) for Windows taskbar and title bar
+
+### 📦 v0.7.4 — PyInstaller packaging pipeline
+
+**Goal: single `RobotURDFStudio.exe` that launches directly on Win11 without Python installed.**
+
+**Technical deliverables:**
+- `build.ps1` overhaul:
+  - PyInstaller with `--onefile --windowed --icon=assets/icon.ico`
+  - Hidden imports manifest for PySide6, trimesh, numpy, CadQuery
+  - Data-file collection: `assets/`, `models/`, `i18n.py` translations
+  - UPX compression for smaller binary
+- `.spec` file committed to repo for reproducible builds
+- CI/CD workflow (GitHub Actions) for automated builds on tag push:
+  - Windows runner
+  - Python 3.12 + dependencies
+  - PyInstaller build
+  - Upload exe as release artifact
+- Post-build smoke test script: launch exe, verify window title, exit
+- Version stamp embedded in exe metadata (FileVersion, ProductVersion)
+- `dist/` directory with release checklist: exe + README + sample models + LICENSE
+
+### 📦 v0.7.5 — Packaging refinements & self-test
+
+- Handle PyInstaller edge cases:
+  - OpenGL DLL bundling (PySide6 OpenGL modules)
+  - trimesh binary dependencies (scipy, rtree, shapely — optional, graceful fallback)
+  - CadQuery optional: exe works without it, enables CAD features when present
+- `--onedir` variant for debugging (easier to inspect bundled files)
+- Auto-update check on launch (compare local VERSION with GitHub latest release)
+- Crash reporter: unhandled exception → log file + optional telemetry opt-in dialog
+- First-launch experience: minimal onboarding wizard (language select + sample model load)
+- Sign the exe with self-signed certificate (dev) / code signing cert (release)
+- Windows SmartScreen compatibility: proper PE metadata, no false positive triggers
+
+### 🔬 v0.7.6 — Performance & memory optimisation
+
+- `rendering.py` per-frame hot-path audit:
+  - Cache per-part mesh data in `_ensure_urdf_mesh()` — extract once, reuse across frames
+  - De-duplicate `_build_part_draw_infos()` vertex merging when geometry hasn't changed
+  - Replace `np.vstack` + flatten per-frame with pre-built flat VBOs
+  - Profile: target <8ms render time for 50K triangle scenes
+- `studio_io/picking.py`: add BVH (bounding volume hierarchy) for scenes >10K triangles
+  - Fall back to brute-force for small meshes
+- Qt widget lifecycle: verify no leaked QObjects after 100+ viewport toggle cycles
+- Memory baseline measurement: <200MB private bytes with a loaded URDF + CAD scene
+- `QTimer` interval tuning: 16ms default, adaptive to actual frame time
+
+### 🧪 v0.7.7 — Test coverage expansion
+
+- Bring test count from 95 to 130+:
+  - `robot/animation.py`: 8 tests (quintic easing boundary cases, EMA convergence, wrap-around)
+  - `studio_io/urdf_io.py`: 6 tests (parse valid/invalid URDF, validate, convert to model)
+  - `studio_io/urdf_mesh_builder.py`: 4 tests (pose_urdf_mesh_parts, partially overlapping meshes)
+  - `studio_io/mesh_loader.py`: 4 tests (load_glb_mesh, load_mesh_auto format detection)
+  - `i18n.py`: 4 tests (tr() with/without fmt_args, set_language roundtrip, missing key fallback)
+  - `rendering.py`: 6 tests (DisplayRecord, SceneScale, LightingPreset, multi-mesh draw info)
+  - `ui/top_nav.py`: 4 tests (menu rebuild on language change, signal emission)
+- Integration test: launch MainWindow → import simple_arm.urdf → toggle to 3D → capture screenshot → verify non-black pixels
+- Benchmark tests: FK compute time for 6-joint chain <1ms, mesh load time for 50K tri STL <500ms
+
+### 📚 v0.7.8 — Documentation & project polish
+
+- `README.md`: add real screenshot (not just ASCII diagram)
+- `CLAUDE.md`: update implementation state to v0.7.x detail level
+- `VERSIONING.md`: mark v0.7.1–v0.7.7 items as complete/done
+- API reference docstrings for all public functions in `robot/`, `studio_io/`, `rendering.py`
+- Architecture Decision Record (ADR) for:
+  - Why CPU raycasting over GPU color-ID picking for v0.7.x
+  - Why QSS variables over programmatic style setting
+  - Why single-file exe over installer
+- Changelog (`CHANGELOG.md`) auto-generated from git history since v0.5.0
+
+### 🚀 v0.7.9 — Release candidate
+
+- Full comprehensive-audit pass (12-dimension checklist, all green)
+- All 130+ tests passing on clean Windows 11 machine
+- Exe build verified: launches, loads URDF, renders 3D, exports screenshot
+- README screenshot updated to show v0.7.9 UI
+- Git tag `v0.7.9` pushed, GitHub Release created with exe attached
+- User acceptance checklist:
+  - [ ] Launch from exe (no console window)
+  - [ ] Import URDF (simple_arm.urdf, delta_bot.urdf)
+  - [ ] Toggle 2D ↔ 3D
+  - [ ] Drag joints, apply poses
+  - [ ] Pick faces in 3D, see detail panel update
+  - [ ] Export screenshot
+  - [ ] Switch language (English ↔ 中文)
+  - [ ] Switch theme (Industrial Dark / High Contrast / Compact)
+  - [ ] Resize window, verify layout stays usable
+  - [ ] Close and relaunch, verify viewport state persists
+
+### 🎯 v1.0.0 — Production release
+- All v0.7.x items complete
+- Code-signed Windows exe
+- GitHub Release with tagged version, exe download, changelog
+- One-page quick-start guide (PDF in repo)
+- Submit to relevant OSS directories (GitHub trending, PyPI if applicable)
+
+### 🛠 v0.7.x execution policy
+
+- Each sub-version MUST keep the app launchable and all existing tests passing
+- No speculative features — every PR maps to a specific v0.7.x line item
+- Theme/visual changes must be verified by actual screen rendering, not just QSS linting
+- Packaging changes must be verified by actually running the produced exe
+- Performance changes must be backed by before/after measurements
+- Design decisions should reference the specific skill that inspired them (theme-factory, frontend-design, etc.)
+
+## v0.5.x guardrails
 
 ### 3D infrastructure already built
 
