@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="delta_bot">
+  <link name="base_plate">
+    <visual>
+      <geometry>
+        <cylinder radius="0.3" length="0.05"/>
+      </geometry>
+      <origin xyz="0 0 0.025" rpy="0 0 0"/>
+    </visual>
+  </link>
+  <link name="upper_arm_a">
+    <visual>
+      <geometry>
+        <box size="0.03 0.25 0.03"/>
+      </geometry>
+      <origin xyz="0 0.125 0" rpy="0 0 0"/>
+    </visual>
+  </link>
+  <link name="upper_arm_b">
+    <visual>
+      <geometry>
+        <box size="0.03 0.25 0.03"/>
+      </geometry>
+      <origin xyz="0 0.125 0" rpy="0 0 0"/>
+    </visual>
+  </link>
+  <link name="upper_arm_c">
+    <visual>
+      <geometry>
+        <box size="0.03 0.25 0.03"/>
+      </geometry>
+      <origin xyz="0 0.125 0" rpy="0 0 0"/>
+    </visual>
+  </link>
+  <link name="forearm_a">
+    <visual>
+      <geometry>
+        <box size="0.02 0.3 0.02"/>
+      </geometry>
+      <origin xyz="0 0.15 0" rpy="0 0 0"/>
+    </visual>
+  </link>
+  <link name="forearm_b">
+    <visual>
+      <geometry>
+        <box size="0.02 0.3 0.02"/>
+      </geometry>
+      <origin xyz="0 0.15 0" rpy="0 0 0"/>
+    </visual>
+  </link>
+  <link name="forearm_c">
+    <visual>
+      <geometry>
+        <box size="0.02 0.3 0.02"/>
+      </geometry>
+      <origin xyz="0 0.15 0" rpy="0 0 0"/>
+    </visual>
+  </link>
+  <link name="end_effector">
+    <visual>
+      <geometry>
+        <sphere radius="0.04"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </visual>
+  </link>
+
+  <joint name="base_to_upper_a" type="revolute">
+    <parent link="base_plate"/>
+    <child link="upper_arm_a"/>
+    <origin xyz="0.1732 0 -0.05" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-0.7854" upper="0.7854" effort="10" velocity="5.0"/>
+  </joint>
+  <joint name="base_to_upper_b" type="revolute">
+    <parent link="base_plate"/>
+    <child link="upper_arm_b"/>
+    <origin xyz="-0.0866 -0.15 -0.05" rpy="0 0 2.0944"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-0.7854" upper="0.7854" effort="10" velocity="5.0"/>
+  </joint>
+  <joint name="base_to_upper_c" type="revolute">
+    <parent link="base_plate"/>
+    <child link="upper_arm_c"/>
+    <origin xyz="-0.0866 0.15 -0.05" rpy="0 0 -2.0944"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-0.7854" upper="0.7854" effort="10" velocity="5.0"/>
+  </joint>
+  <joint name="upper_a_to_forearm_a" type="revolute">
+    <parent link="upper_arm_a"/>
+    <child link="forearm_a"/>
+    <origin xyz="0 -0.25 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-0.7854" upper="0.7854" effort="5" velocity="5.0"/>
+  </joint>
+  <joint name="upper_b_to_forearm_b" type="revolute">
+    <parent link="upper_arm_b"/>
+    <child link="forearm_b"/>
+    <origin xyz="0 -0.25 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-0.7854" upper="0.7854" effort="5" velocity="5.0"/>
+  </joint>
+  <joint name="upper_c_to_forearm_c" type="revolute">
+    <parent link="upper_arm_c"/>
+    <child link="forearm_c"/>
+    <origin xyz="0 -0.25 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-0.7854" upper="0.7854" effort="5" velocity="5.0"/>
+  </joint>
+  <joint name="forearm_a_to_ee" type="revolute">
+    <parent link="forearm_a"/>
+    <child link="end_effector"/>
+    <origin xyz="0 -0.3 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-0.5236" upper="0.5236" effort="3" velocity="5.0"/>
+  </joint>
+  <joint name="forearm_b_to_ee" type="revolute">
+    <parent link="forearm_b"/>
+    <child link="end_effector"/>
+    <origin xyz="0 -0.3 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-0.5236" upper="0.5236" effort="3" velocity="5.0"/>
+  </joint>
+  <joint name="forearm_c_to_ee" type="revolute">
+    <parent link="forearm_c"/>
+    <child link="end_effector"/>
+    <origin xyz="0 -0.3 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-0.5236" upper="0.5236" effort="3" velocity="5.0"/>
+  </joint>
+</robot>
