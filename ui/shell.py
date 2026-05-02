@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
+import time
 from typing import Iterable
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
@@ -32,30 +32,36 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from robot_model import JointSpec, RobotJoint, RobotLink, RobotModel, ViewState
-from rendering import FakeThreeDViewportBackend, MeshViewportBackend, SkeletonViewportBackend, ViewportBackend, ViewportOverlay
-from ui.workflow_status import build_workflow_status_snapshot, compare_snapshots
+from robot_model import JointSpec, RobotModel, ViewState
+from rendering import MeshViewportBackend, SkeletonViewportBackend, ViewportBackend, ViewportOverlay
+from config import CONFIG
+from i18n import tr
+from studio_io.urdf_io import collect_related_resources, convert_summary_to_model, parse_urdf_file, validate_urdf_path
+from ui.workflow_status import ConnectionState, build_workflow_status_snapshot, compare_snapshots
+from robot.animation import interpolate_joint_values
+from cad.edit_bridge import EditAction, EditHistory, PickToHandleMapping
+from cad.sample_parts import build_base_mount_part, build_wrist_link_part
 
 
 RECENT_PROJECTS = ["AtlasArm / production-cell-01", "DeltaBot / calibration-suite", "FieldRig / embedded-testbench"]
 DEVICE_PORTS = ["COM3", "COM5", "COM8", "USB0"]
 PROJECT_HINTS = ["models", "assets", "configs", "logs", "firmware", "urdf"]
-URDF_HINTS = [".urdf", ".xacro", ".xml"]
-RESOURCE_SUFFIXES = {".stl", ".dae", ".obj", ".step", ".stp", ".json", ".yaml", ".yml", ".launch", ".py", ".cfg", ".ini"}
 
 
 def _infer_selection_kind(text: str) -> str:
     lowered = text.lower()
     if lowered.startswith("urdf:"):
         return "urdf"
-    if lowered.startswith("links"):
-        return "links"
-    if lowered.startswith("joints"):
-        return "joints"
-    if lowered.startswith("warnings"):
-        return "warnings"
     if lowered.endswith("/"):
         return "folder"
+    kind_map = {
+        "links": "links",
+        "joints": "joints",
+        "warnings": "warnings",
+    }
+    for prefix, kind in kind_map.items():
+        if lowered.startswith(prefix):
+            return kind
     return "item"
 
 
@@ -70,7 +76,14 @@ class UrdfModelSummary:
     robot_name: str
     links: list[str]
     joints: list[tuple[str, str, str]]
-    warnings: list[str]
+    joint_specs: list[JointSpec] | None = None
+    warnings: list[str] | None = None
+
+    def __post_init__(self):
+        if self.warnings is None:
+            object.__setattr__(self, "warnings", [])
+        if self.joint_specs is None:
+            object.__setattr__(self, "joint_specs", [])
 
 
 @dataclass(frozen=True)
@@ -107,12 +120,14 @@ class JointSlider(QWidget):
         layout.setVerticalSpacing(4)
 
         label = QLabel(name.replace("_", " ").title())
+        label.setMinimumWidth(90)
         self.spin = QDoubleSpinBox()
         self.spin.setRange(minimum, maximum)
         self.spin.setSingleStep(1.0)
         self.spin.setSuffix("°")
         self.spin.setValue(value)
         self.spin.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
+        self.spin.setMinimumWidth(78)
 
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setRange(int(minimum * self._SLIDER_SCALE), int(maximum * self._SLIDER_SCALE))
@@ -145,18 +160,20 @@ class JointSlider(QWidget):
 
 
 class RobotViewport(QFrame):
+    pick_changed = Signal(dict)
+
     def __init__(self) -> None:
         super().__init__()
         self.values = [spec.default for spec in JOINT_SPECS]
-        self.selected_item = "No selection"
+        self.selected_item = tr("robot.no_selection")
         self.selection_kind = "none"
-        self.robot_name = "Robot Workspace"
+        self.robot_name = tr("robot.workspace_name")
         self.urdf_summary: RobotModel | None = None
         self.view_mode = "skeleton"
-        self.model_path = "No model loaded"
+        self.model_path = tr("robot.no_model")
         self.backend: ViewportBackend = SkeletonViewportBackend()
-        self._overlay = ViewportOverlay(title=self.robot_name, subtitle="No model loaded")
-        self.setMinimumSize(820, 560)
+        self._overlay = ViewportOverlay(title=self.robot_name, subtitle=tr("robot.no_model"))
+        self.setMinimumSize(CONFIG.viewport_min_width, CONFIG.viewport_min_height)
         self.setFrameShape(QFrame.Shape.StyledPanel)
 
         self._scene_layout = QVBoxLayout()
@@ -171,6 +188,8 @@ class RobotViewport(QFrame):
                 item.widget().setParent(None)
                 item.widget().deleteLater()
         widget = self.backend.build_widget()
+        if hasattr(widget, "selection_changed"):
+            widget.selection_changed.connect(self.pick_changed.emit)
         self._scene_layout.addWidget(widget)
 
     def set_joint_values(self, values: Iterable[float]) -> None:
@@ -181,6 +200,9 @@ class RobotViewport(QFrame):
     def set_selected_item(self, item_text: str) -> None:
         self.selected_item = item_text
         self.selection_kind = _infer_selection_kind(item_text)
+        widget = self.backend.build_widget()
+        if hasattr(widget, "set_highlighted_item"):
+            widget.set_highlighted_item(item_text)
         self.update()
 
     def set_robot_summary(self, summary: RobotModel | None) -> None:
@@ -213,6 +235,30 @@ class RobotViewport(QFrame):
         self.view_mode = mode
         self._refresh_render_frame()
         self.update()
+
+    def reset_camera(self) -> None:
+        widget = self.backend.build_widget()
+        if hasattr(widget, "reset_camera"):
+            widget.reset_camera()
+        self._refresh_render_frame()
+
+    def set_camera_preset(self, preset_name: str) -> None:
+        widget = self.backend.build_widget()
+        if hasattr(widget, "set_camera_preset"):
+            widget.set_camera_preset(preset_name)
+        self._refresh_render_frame()
+
+    def set_wireframe(self, enabled: bool) -> None:
+        widget = self.backend.build_widget()
+        if hasattr(widget, "set_wireframe"):
+            widget.set_wireframe(enabled)
+        self._refresh_render_frame()
+
+    def export_screenshot(self, path: str | Path) -> bool:
+        widget = self.backend.build_widget()
+        if hasattr(widget, "export_screenshot"):
+            return bool(widget.export_screenshot(path))
+        return False
 
     def _draw_card(self, painter: QPainter, x: int, y: int, w: int, h: int, title: str, value: str) -> None:
         painter.setBrush(QColor("#10182a"))
@@ -276,23 +322,18 @@ class RobotViewport(QFrame):
         painter.drawText(18, 80, f"Selected: {self.selected_item}")
 
         active = self.view_mode != "skeleton"
-        self._draw_status_badge(painter, 18, 100, "3D shell", active)
-        self._draw_card(painter, 18, 134, 220, 58, "Joint count", f"{len(self.values)} axis controls")
-        self._draw_card(painter, 18, 202, 220, 58, "Selection", self.selected_item)
-        self._draw_card(painter, 18, 270, 220, 58, "View mode", self.view_mode)
-        self._draw_card(painter, 18, 338, 220, 58, "Model", self.model_path)
+        self._draw_status_badge(painter, 18, 100, tr("shell.3d_shell"), active)
+        self._draw_card(painter, 18, 134, 220, 58, tr("shell.joint_count"), f"{len(self.values)} {tr('shell.axis_controls')}")
+        self._draw_card(painter, 18, 202, 220, 58, tr("shell.selection"), self.selected_item)
+        self._draw_card(painter, 18, 270, 220, 58, tr("shell.view_mode"), self.view_mode)
+        self._draw_card(painter, 18, 338, 220, 58, tr("shell.model"), self.model_path)
         if self.urdf_summary is not None:
             self._draw_card(
-                painter,
-                18,
-                406,
-                220,
-                84,
-                "URDF model",
-                f"{self.urdf_summary.name}: {len(self.urdf_summary.links)} links / {len(self.urdf_summary.joints)} joints",
+                painter, 18, 406, 220, 84, tr("shell.urdf_model"),
+                f"{self.urdf_summary.name}: {len(self.urdf_summary.links)} {tr('shell.links_unit')} / {len(self.urdf_summary.joints)} {tr('shell.joints_unit')}",
             )
         self._draw_axis_widget(painter, rect)
-        painter.drawText(18, rect.height() - 22, "Viewport shell prepared for real 3D backend")
+        painter.drawText(18, rect.height() - 22, tr("shell.viewport_footer"))
 
 
 class ConsoleCard(QFrame):
@@ -311,6 +352,65 @@ class ConsoleCard(QFrame):
         layout.addWidget(text)
 
 
+class TelemetryCard(QFrame):
+    """Structured telemetry display with color-coded status indicators."""
+
+    _HEARTBEAT_COLORS = {"active": "#4ade80", "idle": "#facc15", "fault": "#f87171"}
+    _HEALTH_COLORS = {"nominal": "#4ade80", "active": "#4ade80", "degraded": "#facc15", "offline": "#9ca3af", "fault": "#f87171", "connecting": "#60a5fa"}
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("Card")
+        layout = QGridLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setHorizontalSpacing(12)
+        layout.setVerticalSpacing(4)
+
+        self.heartbeat = self._add_indicator(layout, tr("shell.heartbeat"), 0, 0)
+        self.temperature = self._add_label_pair(layout, tr("shell.temp"), 0, 1)
+        self.motion = self._add_indicator(layout, tr("shell.motion"), 1, 0)
+        self.voltage = self._add_label_pair(layout, tr("shell.voltage"), 1, 1)
+        self.health = self._add_label_pair(layout, tr("shell.health"), 2, 0)
+        self.warnings = self._add_label_pair(layout, tr("shell.warnings_label"), 2, 1)
+
+    def _add_indicator(self, layout: QGridLayout, label: str, row: int, col: int) -> QLabel:
+        header = QLabel(f"{label}:")
+        header.setObjectName("CardBody")
+        value_label = QLabel("--")
+        value_label.setObjectName("CardBody")
+        layout.addWidget(header, row, col * 2)
+        layout.addWidget(value_label, row, col * 2 + 1)
+        return value_label
+
+    def _add_label_pair(self, layout: QGridLayout, label: str, row: int, col: int) -> QLabel:
+        return self._add_indicator(layout, label, row, col)
+
+    def refresh(self, snapshot) -> None:
+        t = snapshot.telemetry
+        hb_color = self._HEARTBEAT_COLORS.get(t.heartbeat, "#9ca3af")
+        self.heartbeat.setText(t.heartbeat)
+        self.heartbeat.setStyleSheet(f"color: {hb_color}; font-weight: 600;")
+
+        self.temperature.setText(f"{t.temperature_c:.1f} °C")
+        self.motion.setText(t.motion_state)
+        mt_color = "#4ade80" if t.motion_state in {"standby", "idle", "ready"} else "#facc15"
+        self.motion.setStyleSheet(f"color: {mt_color}; font-weight: 600;")
+
+        self.voltage.setText(f"{t.supply_voltage_v:.1f} V")
+        health = snapshot.telemetry_health
+        hl_color = self._HEALTH_COLORS.get(health, "#9ca3af")
+        self.health.setText(health)
+        self.health.setStyleSheet(f"color: {hl_color}; font-weight: 600;")
+
+        wc = len(t.warnings)
+        if wc == 0:
+            self.warnings.setText(tr("shell.warnings_none"))
+            self.warnings.setStyleSheet("color: #4ade80;")
+        else:
+            self.warnings.setText(tr("shell.warnings_active", wc))
+            self.warnings.setStyleSheet("color: #f87171; font-weight: 600;")
+
+
 class OverviewBanner(QFrame):
     def __init__(self) -> None:
         super().__init__()
@@ -318,14 +418,14 @@ class OverviewBanner(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(4)
-        self.title = QLabel("Robot URDF Studio")
+        self.title = QLabel(tr("app.title"))
         self.title.setObjectName("BannerTitle")
-        self.subtitle = QLabel("Industrial workbench for robot models, device control, and packaging-ready Win11 delivery.")
+        self.subtitle = QLabel(tr("app.subtitle"))
         self.subtitle.setWordWrap(True)
         self.subtitle.setObjectName("BannerSubtitle")
         chip_row = QHBoxLayout()
         self.chips: list[QLabel] = []
-        for text in ["URDF", "CAD", "I/O", "packaging"]:
+        for text in [tr("tag.urdf"), tr("tag.cad"), tr("tag.io"), tr("tag.packaging")]:
             chip = QLabel(text)
             chip.setObjectName("BannerChip")
             self.chips.append(chip)
@@ -344,9 +444,9 @@ class DetailPanel(QFrame):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(4)
 
-        title = QLabel("Selection details")
+        title = QLabel(tr("shell.selection_details"))
         title.setObjectName("CardTitle")
-        self.summary = QLabel("Select a project tree node or URDF item")
+        self.summary = QLabel(tr("shell.select_hint"))
         self.summary.setObjectName("CardBody")
         self.summary.setWordWrap(True)
 
@@ -354,7 +454,7 @@ class DetailPanel(QFrame):
         self.fields.setHeaderHidden(True)
         self.fields.setMinimumHeight(92)
 
-        self.action_hint = QLabel("Tip: use the tree to inspect URDF structure and workspace resources.")
+        self.action_hint = QLabel(tr("shell.tip_tree"))
         self.action_hint.setObjectName("CardBody")
         self.action_hint.setWordWrap(True)
 
@@ -378,9 +478,9 @@ class ResourcePanel(QFrame):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(4)
 
-        title = QLabel("URDF resources")
+        title = QLabel(tr("shell.urdf_resources"))
         title.setObjectName("CardTitle")
-        self.summary = QLabel("No URDF loaded yet")
+        self.summary = QLabel(tr("shell.no_urdf"))
         self.summary.setObjectName("CardBody")
         self.summary.setWordWrap(True)
         self.resource_list = QListWidget()
@@ -391,7 +491,7 @@ class ResourcePanel(QFrame):
         layout.addWidget(title)
         layout.addWidget(self.summary)
         layout.addWidget(self.resource_list)
-        layout.addWidget(QLabel("URDF structure"))
+        layout.addWidget(QLabel(tr("shell.urdf_structure")))
         layout.addWidget(self.structure_tree)
 
     def set_resources(self, items: list[str], summary: str) -> None:
@@ -402,19 +502,19 @@ class ResourcePanel(QFrame):
     def set_structure(self, summary: UrdfModelSummary | None) -> None:
         self.structure_tree.clear()
         if summary is None:
-            self.structure_tree.addTopLevelItem(QTreeWidgetItem(["No parsed URDF structure"]))
+            self.structure_tree.addTopLevelItem(QTreeWidgetItem([tr("shell.no_parsed_urdf")]))
             return
-        robot_item = QTreeWidgetItem([f"robot: {summary.robot_name}"])
-        links_item = QTreeWidgetItem([f"links ({len(summary.links)})"])
+        robot_item = QTreeWidgetItem([f"{tr('robot.robot')}: {summary.robot_name}"])
+        links_item = QTreeWidgetItem([f"{tr('robot.links')} ({len(summary.links)})"])
         for link in summary.links:
             links_item.addChild(QTreeWidgetItem([link]))
-        joints_item = QTreeWidgetItem([f"joints ({len(summary.joints)})"])
+        joints_item = QTreeWidgetItem([f"{tr('robot.joints')} ({len(summary.joints)})"])
         for name, parent, child in summary.joints:
             joints_item.addChild(QTreeWidgetItem([f"{name}: {parent} -> {child}"]))
         robot_item.addChild(links_item)
         robot_item.addChild(joints_item)
         if summary.warnings:
-            warn_item = QTreeWidgetItem([f"warnings ({len(summary.warnings)})"])
+            warn_item = QTreeWidgetItem([f"{tr('robot.warnings')} ({len(summary.warnings)})"])
             for warning in summary.warnings:
                 warn_item.addChild(QTreeWidgetItem([warning]))
             robot_item.addChild(warn_item)
@@ -426,13 +526,25 @@ class WorkspaceShell(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.log_sink: QTextEdit | None = None
-        self.connection_state = QLabel("Disconnected")
+        self.connection_state = QLabel(tr("conn.disconnected"))
         self.project_root: Path | None = None
         self.loaded_urdf: Path | None = None
         self.current_model = RobotModel()
         self.current_urdf_summary: UrdfModelSummary | None = None
         self.selection_state = SelectionState()
         self.workflow_snapshot = build_workflow_status_snapshot()
+        self.edit_history = EditHistory()
+        self._cad_parts = {
+            "cad_base_mount": build_base_mount_part()[0],
+            "cad_wrist_link": build_wrist_link_part()[0],
+        }
+        self._pose_timer = QTimer(self)
+        self._pose_timer.setInterval(16)
+        self._pose_timer.timeout.connect(self._advance_pose_animation)
+        self._pose_elapsed_ms = 0.0
+        self._pose_duration_ms = 840.0
+        self._pose_start: dict[str, float] = {}
+        self._pose_target: dict[str, float] = {}
 
         root = QHBoxLayout(self)
         root.setContentsMargins(8, 8, 8, 8)
@@ -440,6 +552,7 @@ class WorkspaceShell(QWidget):
 
         self.left_panel = self._build_left_panel()
         self.viewport = RobotViewport()
+        self.viewport.pick_changed.connect(self._update_details_from_pick)
         self.right_panel = self._build_right_panel()
 
         root.addWidget(self.left_panel, 0)
@@ -448,14 +561,14 @@ class WorkspaceShell(QWidget):
 
         self._apply_style()
         self._sync_view()
-        self._append_log("Workspace ready")
+        self._append_log(tr("shell.workspace_ready"))
 
     def _build_left_panel(self) -> QWidget:
         scroll = QScrollArea()
         scroll.setObjectName("SidePanel")
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setMinimumWidth(280)
+        scroll.setMinimumWidth(250)
 
         panel = QFrame()
         layout = QVBoxLayout(panel)
@@ -465,9 +578,9 @@ class WorkspaceShell(QWidget):
         banner = OverviewBanner()
         layout.addWidget(banner)
 
-        layout.addWidget(ConsoleCard("Project", "Load assets, workspace folders, and build targets."))
+        layout.addWidget(ConsoleCard(tr("shell.project"), tr("shell.project_body")))
 
-        recent_label = QLabel("Recent")
+        recent_label = QLabel(tr("shell.recent"))
         recent_label.setObjectName("SectionTitle")
         layout.addWidget(recent_label)
         self.recent_list = QListWidget()
@@ -478,18 +591,18 @@ class WorkspaceShell(QWidget):
 
         browse_row = QHBoxLayout()
         self.workspace_path = QLineEdit()
-        self.workspace_path.setPlaceholderText("Workspace path")
-        browse_btn = QPushButton("Browse")
+        self.workspace_path.setPlaceholderText(tr("shell.workspace_path"))
+        browse_btn = QPushButton(tr("shell.browse"))
         browse_btn.clicked.connect(self.browse_workspace)
         browse_row.addWidget(self.workspace_path, 1)
         browse_row.addWidget(browse_btn)
         layout.addLayout(browse_row)
 
-        open_btn = QPushButton("Open")
+        open_btn = QPushButton(tr("shell.open"))
         open_btn.clicked.connect(self._open_workspace)
         layout.addWidget(open_btn)
 
-        tree_label = QLabel("Tree")
+        tree_label = QLabel(tr("shell.tree"))
         tree_label.setObjectName("SectionTitle")
         layout.addWidget(tree_label)
         self.project_tree = QTreeWidget()
@@ -505,81 +618,89 @@ class WorkspaceShell(QWidget):
 
         urdf_row = QHBoxLayout()
         self.urdf_path = QLineEdit()
-        self.urdf_path.setPlaceholderText("URDF / Xacro")
-        import_btn = QPushButton("Import")
+        self.urdf_path.setPlaceholderText(tr("shell.urdf_xacro"))
+        import_btn = QPushButton(tr("shell.import"))
         import_btn.clicked.connect(self.import_urdf)
         urdf_row.addWidget(self.urdf_path, 1)
         urdf_row.addWidget(import_btn)
         layout.addLayout(urdf_row)
 
-        layout.addWidget(ConsoleCard("Links", "Serial, CAN, and TCP status."))
-        layout.addWidget(ConsoleCard("Workflow", "Planning, logs, flashing, and test execution."))
+        layout.addWidget(ConsoleCard(tr("shell.links_card"), tr("shell.links_body")))
+        layout.addWidget(ConsoleCard(tr("shell.workflow_card"), tr("shell.workflow_body")))
         layout.addItem(QSpacerItem(20, 16, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum))
 
         scroll.setWidget(panel)
         return scroll
 
     def _build_right_panel(self) -> QWidget:
-        panel = QFrame()
-        panel.setObjectName("SidePanel")
-        panel.setMaximumWidth(390)
-        panel.setMinimumWidth(320)
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(8)
+        scroll = QScrollArea()
+        scroll.setObjectName("SidePanel")
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setMinimumWidth(CONFIG.right_panel_min_width)
+        scroll.setMaximumWidth(CONFIG.right_panel_max_width)
 
-        header = QLabel("Joint control")
+        panel = QFrame()
+        panel.setSizePolicy(QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding))
+        self._right_layout = QVBoxLayout(panel)
+        self._right_layout.setContentsMargins(10, 10, 10, 10)
+        self._right_layout.setSpacing(8)
+        scroll.setWidget(panel)
+
+        header = QLabel(tr("shell.joint_control"))
         header.setObjectName("PanelTitle")
-        layout.addWidget(header)
+        self._right_layout.addWidget(header)
+
+        self._joint_container = QWidget()
+        self._joint_container_layout = QVBoxLayout(self._joint_container)
+        self._joint_container_layout.setContentsMargins(0, 0, 0, 0)
+        self._joint_container_layout.setSpacing(8)
+        self._right_layout.addWidget(self._joint_container)
 
         self.joints: list[JointSlider] = []
-        for spec in JOINT_SPECS:
-            js = JointSlider(spec.name, spec.minimum, spec.maximum, spec.default)
-            js.spin.valueChanged.connect(self._sync_view)
-            layout.addWidget(js)
-            self.joints.append(js)
+        self._populate_default_joints()
 
         row = QHBoxLayout()
         for preset in POSES:
             btn = QPushButton(preset.name)
             btn.clicked.connect(lambda _=False, p=preset: self.apply_pose(p))
             row.addWidget(btn)
-        layout.addLayout(row)
+        self._right_layout.addLayout(row)
 
         actions = QHBoxLayout()
-        reset_btn = QPushButton("Reset")
+        reset_btn = QPushButton(tr("shell.reset"))
         reset_btn.clicked.connect(self.reset_pose)
-        copy_btn = QPushButton("Copy")
+        copy_btn = QPushButton(tr("shell.copy"))
         copy_btn.clicked.connect(self.copy_angles)
         actions.addWidget(reset_btn)
         actions.addWidget(copy_btn)
-        layout.addLayout(actions)
+        self._right_layout.addLayout(actions)
 
-        toggle_btn = QPushButton("2D / 3D")
+        toggle_btn = QPushButton(tr("shell.toggle_2d3d"))
         toggle_btn.clicked.connect(self._toggle_viewport_backend)
-        layout.addWidget(toggle_btn)
+        self._right_layout.addWidget(toggle_btn)
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._build_runtime_tab(), "Runtime")
-        self.tabs.addTab(self._build_io_tab(), "I/O")
-        self.tabs.addTab(self._build_tasks_tab(), "Tasks")
-        layout.addWidget(self.tabs)
-        layout.addItem(QSpacerItem(20, 12, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
-        return panel
+        self.tabs.addTab(self._build_runtime_tab(), tr("shell.runtime"))
+        self.tabs.addTab(self._build_io_tab(), tr("shell.io"))
+        self.tabs.addTab(self._build_tasks_tab(), tr("shell.tasks"))
+        self._right_layout.addWidget(self.tabs)
+        self._right_layout.addItem(QSpacerItem(20, 12, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+        return scroll
 
     def _build_runtime_tab(self) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setSpacing(6)
-        layout.addWidget(ConsoleCard("Telemetry", "Joint states, temperature, voltage, heartbeat."))
-        layout.addWidget(ConsoleCard("Planner", "Path preview, queue, and motion validation."))
+        layout.addWidget(ConsoleCard(tr("shell.telemetry_card"), tr("shell.telemetry_body")))
+        layout.addWidget(ConsoleCard(tr("shell.planner_card"), tr("shell.planner_body")))
         return widget
 
     def _build_io_tab(self) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setSpacing(6)
-        layout.addWidget(ConsoleCard("Serial", "COM ports, baud rate, reconnect, and log capture."))
+        layout.addWidget(ConsoleCard(tr("shell.serial_card"), tr("shell.serial_body")))
 
         io_row = QHBoxLayout()
         self.port_combo = QComboBox()
@@ -591,8 +712,8 @@ class WorkspaceShell(QWidget):
         layout.addLayout(io_row)
 
         conn_row = QHBoxLayout()
-        self.connect_btn = QPushButton("Connect")
-        self.disconnect_btn = QPushButton("Disconnect")
+        self.connect_btn = QPushButton(tr("shell.connect"))
+        self.disconnect_btn = QPushButton(tr("shell.disconnect"))
         self.connect_btn.clicked.connect(self._connect_device)
         self.disconnect_btn.clicked.connect(self._disconnect_device)
         self.disconnect_btn.setEnabled(False)
@@ -604,22 +725,21 @@ class WorkspaceShell(QWidget):
         layout.addWidget(self.connection_state)
 
         self.command_box = QLineEdit()
-        self.command_box.setPlaceholderText("Send command, e.g. ping")
-        send_btn = QPushButton("Send")
+        self.command_box.setPlaceholderText(tr("shell.send_placeholder"))
+        send_btn = QPushButton(tr("shell.send"))
         send_btn.clicked.connect(self._send_command)
         layout.addWidget(self.command_box)
         layout.addWidget(send_btn)
 
-        self.telemetry_title = QLabel("Telemetry")
+        self.telemetry_title = QLabel(tr("shell.telemetry_title"))
         self.telemetry_title.setObjectName("SectionTitle")
         layout.addWidget(self.telemetry_title)
-        self.telemetry_box = QTextEdit()
-        self.telemetry_box.setReadOnly(True)
-        self.telemetry_box.setMaximumHeight(104)
-        layout.addWidget(self.telemetry_box)
+        self.telemetry_card = TelemetryCard()
+        self.telemetry_card.setMaximumHeight(110)
+        layout.addWidget(self.telemetry_card)
 
-        layout.addWidget(ConsoleCard("Network", "TCP/UDP bridge support for controllers and simulators."))
-        layout.addWidget(ConsoleCard("Flash", "Firmware upload and device tooling hooks."))
+        layout.addWidget(ConsoleCard(tr("shell.network_card"), tr("shell.network_body")))
+        layout.addWidget(ConsoleCard(tr("shell.flash_card"), tr("shell.flash_body")))
         self._refresh_workflow_panels()
         return widget
 
@@ -627,158 +747,33 @@ class WorkspaceShell(QWidget):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setSpacing(6)
-        layout.addWidget(ConsoleCard("Actions", "Open workspace, import URDF, connect device, run checks."))
-        layout.addWidget(ConsoleCard("Logs", "Timestamped event stream for debugging."))
-        layout.addWidget(ConsoleCard("Status", "Connection health, errors, and motion state."))
+        layout.addWidget(ConsoleCard(tr("shell.actions_card"), tr("shell.actions_body")))
+        layout.addWidget(ConsoleCard(tr("shell.logs_card"), tr("shell.logs_body")))
+        layout.addWidget(ConsoleCard(tr("shell.status_card"), tr("shell.status_body")))
         return widget
 
+    def _populate_default_joints(self) -> None:
+        for spec in JOINT_SPECS:
+            js = JointSlider(spec.name, spec.minimum, spec.maximum, spec.default)
+            js.spin.valueChanged.connect(self._sync_view)
+            self._joint_container_layout.addWidget(js)
+            self.joints.append(js)
+
+    def _rebuild_joint_panel(self, joint_specs: list[JointSpec]) -> None:
+        for js in self.joints:
+            js.setParent(None)
+        self.joints.clear()
+        for spec in joint_specs:
+            js = JointSlider(spec.name, spec.minimum, spec.maximum, spec.default)
+            js.spin.valueChanged.connect(self._sync_view)
+            self._joint_container_layout.addWidget(js)
+            self.joints.append(js)
+        self._append_log(tr("log.joint_panel_rebuilt", len(joint_specs)))
+
     def _apply_style(self) -> None:
-        self.setStyleSheet(
-            """
-            #TopNav {
-                background: rgba(12, 16, 25, 0.98);
-                border: 1px solid rgba(100, 115, 140, 0.22);
-                border-radius: 12px;
-            }
-            #TopNavButton {
-                min-width: 70px;
-                color: #d9e2f2;
-                background: rgba(26, 35, 54, 0.92);
-                border: 1px solid rgba(104, 118, 145, 0.22);
-                border-radius: 10px;
-                padding: 5px 10px;
-                font-weight: 600;
-            }
-            #TopNavButton::menu-indicator {
-                image: none;
-            }
-            #TopNavSummary {
-                color: #9ca9c0;
-                padding-right: 8px;
-            }
-            #SidePanel {
-                background: rgba(10, 14, 24, 0.94);
-                border: 1px solid rgba(122, 139, 174, 0.24);
-                border-radius: 18px;
-            }
-            #Banner {
-                background: linear-gradient(135deg, rgba(30, 40, 64, 0.96), rgba(14, 19, 31, 0.98));
-                border: 1px solid rgba(154, 168, 198, 0.18);
-                border-radius: 16px;
-            }
-            #BannerTitle {
-                font-size: 18px;
-                font-weight: 800;
-                letter-spacing: 0.4px;
-            }
-            #BannerSubtitle {
-                color: #b3bfd8;
-            }
-            #BannerChip {
-                background: rgba(39, 50, 74, 0.95);
-                color: #dce5f7;
-                border: 1px solid rgba(130, 146, 182, 0.25);
-                border-radius: 999px;
-                padding: 2px 8px;
-            }
-            #SectionTitle, #MutedLabel, #CardBody {
-                color: #a7b2c9;
-            }
-            #ConnectionState {
-                color: #d6def1;
-                font-weight: 600;
-                padding: 2px 0;
-            }
-            #Card {
-                background: rgba(20, 28, 44, 0.94);
-                border-radius: 12px;
-            }
-            #CardTitle {
-                font-weight: 700;
-            }
-            QScrollArea#SidePanel {
-                background: rgba(10, 14, 24, 0.94);
-                border: 1px solid rgba(122, 139, 174, 0.24);
-                border-radius: 18px;
-            }
-            QScrollArea#SidePanel > QWidget > QWidget {
-                background: transparent;
-            }
-            QScrollBar:vertical {
-                background: #0f1626;
-                width: 8px;
-                margin: 4px 2px 4px 0;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:vertical {
-                background: #394867;
-                border-radius: 4px;
-                min-height: 30px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #4a5d82;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background: none;
-            }
-            QListWidget, QLineEdit, QComboBox, QTextEdit, QTreeWidget {
-                background: #0f1626;
-                border: 1px solid #394867;
-                border-radius: 10px;
-                padding: 5px 7px;
-                color: #e6edf8;
-            }
-            QPushButton {
-                background: #1f2a42;
-                border: 1px solid #40506f;
-                border-radius: 10px;
-                padding: 7px 10px;
-            }
-            QPushButton:hover {
-                background: #293753;
-            }
-            QPushButton:disabled {
-                color: #66708b;
-                background: #151d2e;
-            }
-            QSlider::groove:horizontal {
-                border-radius: 4px;
-                height: 6px;
-                background: #27324a;
-            }
-            QSlider::handle:horizontal {
-                width: 18px;
-                margin: -6px 0;
-                border-radius: 9px;
-                background: #d8e1f5;
-            }
-            QDoubleSpinBox {
-                background: #11182a;
-                border: 1px solid #394867;
-                border-radius: 8px;
-                padding: 4px 8px;
-                min-width: 72px;
-            }
-            QTabWidget::pane {
-                border: 1px solid #394867;
-                border-radius: 10px;
-                top: -1px;
-            }
-            QTabBar::tab {
-                background: #1b2437;
-                padding: 8px 14px;
-                border-top-left-radius: 8px;
-                border-top-right-radius: 8px;
-                margin-right: 2px;
-            }
-            QTabBar::tab:selected {
-                background: #27324a;
-            }
-            """
-        )
+        style_path = Path(__file__).resolve().parent.parent / "assets" / "style.qss"
+        if style_path.exists():
+            self.setStyleSheet(style_path.read_text(encoding="utf-8"))
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(18)
         shadow.setOffset(0, 3)
@@ -793,12 +788,12 @@ class WorkspaceShell(QWidget):
         if path:
             self.workspace_path.setText(path)
             self._set_project_root(Path(path))
-            self._append_log(f"Workspace selected: {path}")
+            self._append_log(tr("log.workspace_selected", path))
 
     def import_urdf(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(self, "Import URDF", str(self.project_root or Path.cwd()), "Robot files (*.urdf *.xacro *.xml)")
         if not file_path:
-            self._append_log("URDF import cancelled")
+            self._append_log(tr("log.urdf_import_cancelled"))
             return
         path = Path(file_path)
         self.urdf_path.setText(str(path))
@@ -807,68 +802,43 @@ class WorkspaceShell(QWidget):
         summary = self._parse_urdf(path)
         self._render_resource_report(path, issues, summary)
         if summary is None:
-            self._append_log(f"URDF parsing failed for: {path.name}")
+            self._append_log(tr("log.urdf_parse_failed", path.name))
         elif issues:
-            self._append_log(f"URDF validation warnings: {'; '.join(issues)}")
-            self._append_log(f"URDF parsed: {summary.robot_name} ({len(summary.links)} links, {len(summary.joints)} joints)")
+            self._append_log(tr("log.urdf_validation_warnings", '; '.join(issues)))
+            self._append_log(tr("log.urdf_parsed", summary.robot_name, len(summary.links), len(summary.joints)))
         else:
-            self._append_log(f"URDF imported successfully: {path.name}")
-            self._append_log(f"URDF parsed: {summary.robot_name} ({len(summary.links)} links, {len(summary.joints)} joints)")
+            self._append_log(tr("log.urdf_import_ok", path.name))
+            self._append_log(tr("log.urdf_parsed", summary.robot_name, len(summary.links), len(summary.joints)))
 
     def _validate_urdf_path(self, path: Path) -> list[str]:
-        issues: list[str] = []
-        if not path.exists():
-            issues.append("file not found")
-            return issues
-        if path.suffix.lower() not in URDF_HINTS:
-            issues.append("unexpected file extension")
-        try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            issues.append("unable to read file")
-            return issues
-        if "<robot" not in text:
-            issues.append("missing <robot> root tag")
-        if "link" not in text:
-            issues.append("no link definitions found")
-        if "joint" not in text:
-            issues.append("no joint definitions found")
-        return issues
+        return validate_urdf_path(path)
 
     def _parse_urdf(self, path: Path) -> UrdfModelSummary | None:
-        try:
-            root = ET.parse(path).getroot()
-        except ET.ParseError as exc:
-            self._append_log(f"URDF XML parse error: {exc}")
+        result = parse_urdf_file(path)
+        if result is None:
+            self._append_log(tr("log.urdf_parse_failed", path.name))
             return None
-        except OSError as exc:
-            self._append_log(f"URDF read error: {exc}")
-            return None
-
-        robot_name = root.attrib.get("name", path.stem)
-        links = [node.attrib.get("name", "unnamed_link") for node in root.findall(".//link")]
-        joints: list[tuple[str, str, str]] = []
-        warnings: list[str] = []
-        for joint in root.findall(".//joint"):
-            name = joint.attrib.get("name", "unnamed_joint")
-            parent = joint.find("parent")
-            child = joint.find("child")
-            parent_name = parent.attrib.get("link", "unknown") if parent is not None else "unknown"
-            child_name = child.attrib.get("link", "unknown") if child is not None else "unknown"
-            joints.append((name, parent_name, child_name))
-            if parent is None or child is None:
-                warnings.append(f"joint '{name}' is missing parent or child link")
-
-        if not links:
-            warnings.append("no link definitions were parsed")
-        if not joints:
-            warnings.append("no joint definitions were parsed")
-
-        return UrdfModelSummary(robot_name=robot_name, links=links, joints=joints, warnings=warnings)
+        raw_specs = result.get("joint_specs", [])
+        joint_specs = [
+            JointSpec(
+                s["name"], s["lower"], s["upper"], s["default"],
+                origin_xyz=tuple(s.get("origin_xyz", (0.0, 0.0, 0.0))),
+                origin_rpy=tuple(s.get("origin_rpy", (0.0, 0.0, 0.0))),
+                axis_xyz=tuple(s.get("axis", (0.0, 0.0, 1.0))),
+            )
+            for s in raw_specs
+        ]
+        return UrdfModelSummary(
+            robot_name=result["robot_name"],
+            links=result["links"],
+            joints=result["joints"],
+            joint_specs=joint_specs,
+            warnings=result.get("warnings", []),
+        )
 
     def _render_resource_report(self, path: Path, issues: list[str], summary: UrdfModelSummary | None) -> None:
         related = self._collect_related_resources(path)
-        status = "Validation passed" if not issues else "Validation warnings: " + ", ".join(issues)
+        status = tr("shell.validation_passed") if not issues else tr("shell.validation_warnings", ", ".join(issues))
         model = self._convert_summary_to_model(summary)
         self.current_model = model
         self.current_urdf_summary = summary
@@ -879,31 +849,28 @@ class WorkspaceShell(QWidget):
         self._sync_project_tree_with_urdf(summary)
         if summary is not None:
             self._update_details_from_tree(f"URDF: {summary.robot_name}")
+            if summary.joint_specs:
+                self._rebuild_joint_panel(summary.joint_specs)
 
     def _convert_summary_to_model(self, summary: UrdfModelSummary | None) -> RobotModel:
         if summary is None:
             return RobotModel()
-        return RobotModel(
-            name=summary.robot_name,
-            links=[RobotLink(name=link) for link in summary.links],
-            joints=[RobotJoint(name=name, parent=parent, child=child) for name, parent, child in summary.joints],
-            warnings=list(summary.warnings),
-        )
+        raw_specs = [
+            {"name": s.name, "origin_xyz": s.origin_xyz, "origin_rpy": s.origin_rpy,
+             "axis": s.axis_xyz}
+            for s in (summary.joint_specs or [])
+        ]
+        result = {
+            "robot_name": summary.robot_name,
+            "links": summary.links,
+            "joints": summary.joints,
+            "joint_specs": raw_specs,
+            "warnings": summary.warnings,
+        }
+        return convert_summary_to_model(result)
 
     def _collect_related_resources(self, path: Path) -> list[str]:
-        root = path.parent
-        resources: list[str] = [path.name]
-        for candidate in sorted(root.iterdir() if root.exists() else []):
-            if candidate == path:
-                continue
-            if candidate.is_dir() and candidate.name.lower() in PROJECT_HINTS:
-                resources.append(f"{candidate.name}/")
-                continue
-            if candidate.suffix.lower() in RESOURCE_SUFFIXES or candidate.name.lower().endswith(".urdf"):
-                resources.append(candidate.name)
-        if len(resources) == 1:
-            resources.append("No adjacent robot assets found")
-        return resources
+        return collect_related_resources(path)
 
     def _sync_project_tree_with_urdf(self, summary: UrdfModelSummary | None) -> None:
         if summary is None:
@@ -914,16 +881,16 @@ class WorkspaceShell(QWidget):
             self.project_tree.addTopLevelItem(top)
         urdf_root = self._find_or_create_child(top, f"URDF: {summary.robot_name}")
         urdf_root.takeChildren()
-        links_branch = QTreeWidgetItem([f"links ({len(summary.links)})"])
+        links_branch = QTreeWidgetItem([f"{tr('robot.links')} ({len(summary.links)})"])
         for link in summary.links:
             links_branch.addChild(QTreeWidgetItem([link]))
-        joints_branch = QTreeWidgetItem([f"joints ({len(summary.joints)})"])
+        joints_branch = QTreeWidgetItem([f"{tr('robot.joints')} ({len(summary.joints)})"])
         for name, parent, child in summary.joints:
             joints_branch.addChild(QTreeWidgetItem([f"{name}: {parent} -> {child}"]))
         urdf_root.addChild(links_branch)
         urdf_root.addChild(joints_branch)
         if summary.warnings:
-            warn_branch = QTreeWidgetItem([f"warnings ({len(summary.warnings)})"])
+            warn_branch = QTreeWidgetItem([f"{tr('robot.warnings')} ({len(summary.warnings)})"])
             for warning in summary.warnings:
                 warn_branch.addChild(QTreeWidgetItem([warning]))
             urdf_root.addChild(warn_branch)
@@ -941,19 +908,19 @@ class WorkspaceShell(QWidget):
 
     def _open_recent_project(self, item) -> None:
         self.workspace_path.setText(item.text())
-        self._append_log(f"Recent project opened: {item.text()}")
+        self._append_log(tr("log.recent_project_opened", item.text()))
 
     def _open_workspace(self) -> None:
         text = self.workspace_path.text().strip()
         if not text:
-            self._append_log("Open workspace requested with empty path")
+            self._append_log(tr("log.open_workspace_empty"))
             return
         path = Path(text)
         if path.exists():
             self._set_project_root(path)
-            self._append_log(f"Workspace opened: {path}")
+            self._append_log(tr("log.workspace_opened", path))
         else:
-            self._append_log(f"Workspace path not found: {path}")
+            self._append_log(tr("log.workspace_not_found", path))
 
     def _set_project_root(self, path: Path) -> None:
         self.project_root = path
@@ -986,27 +953,166 @@ class WorkspaceShell(QWidget):
         self.selection_state = SelectionState(label=text, kind=kind)
         self.viewport.set_selected_item(text)
         self._update_details_from_tree(text)
-        self._append_log(f"Tree item selected: {text}")
+        self._append_log(tr("log.tree_item_selected", text))
 
     def _update_details_from_tree(self, text: str) -> None:
-        details = [("Selected item", text), ("Category", self.selection_state.kind)]
+        details = [(tr("shell.detail_selected_item"), text), (tr("shell.detail_category"), self.selection_state.kind)]
         if self.current_model is not None:
-            details.append(("Loaded robot", self.current_model.name))
-            details.append(("Link count", str(self.current_model.link_count())))
-            details.append(("Joint count", str(self.current_model.joint_count())))
+            details.append((tr("shell.detail_loaded_robot"), self.current_model.name))
+            details.append((tr("shell.detail_link_count"), str(self.current_model.link_count)))
+            details.append((tr("shell.detail_joint_count"), str(self.current_model.joint_count)))
             if self.current_model.warnings:
-                details.append(("Warnings", str(len(self.current_model.warnings))))
-        self.detail_panel.set_details("Live selection details", details)
+                details.append((tr("shell.detail_warnings"), str(len(self.current_model.warnings))))
+        self.detail_panel.set_details(tr("shell.detail_live_selection"), details)
+
+    def _update_details_from_pick(self, payload: dict) -> None:
+        kind = str(payload.get("kind", "")).strip()
+        if not kind:
+            return
+        part_id = str(payload.get("part_id", "")).strip()
+        self.selection_state = SelectionState(label=f"3D {kind}: {part_id}", kind=f"3d-{kind}")
+        details = [
+            (tr("shell.pick_kind"), kind),
+            (tr("shell.pick_part"), part_id or "-"),
+        ]
+        for key in ("face_index", "edge_index", "vertex_index"):
+            if key in payload:
+                details.append((tr(f"shell.pick_{key}"), str(payload[key])))
+        for key in ("face_point", "edge_point", "vertex_point"):
+            if key in payload:
+                point = payload[key]
+                if isinstance(point, (tuple, list)) and len(point) == 3:
+                    details.append((tr(f"shell.pick_{key}"), f"{point[0]:.3f}, {point[1]:.3f}, {point[2]:.3f}"))
+        if self.current_model is not None:
+            details.append((tr("shell.detail_loaded_robot"), self.current_model.name))
+        mapping = self._resolve_pick_cad_handle(payload)
+        if mapping is not None:
+            details.append(("CAD handle", mapping.handle.name))
+            details.append(("CAD selector", mapping.handle.selector))
+            self._record_pick_edit(mapping)
+        self.detail_panel.set_details(tr("shell.pick_selection_title"), details)
+        self._sync_tree_selection_from_pick(payload)
+        self.viewport.set_selected_item(self.selection_state.label)
+        self._append_log(tr("log.tree_item_selected", self.selection_state.label))
+
+    def _resolve_pick_cad_handle(self, payload: dict) -> PickToHandleMapping | None:
+        part_id = str(payload.get("part_id", ""))
+        if part_id not in self._cad_parts:
+            return None
+        try:
+            face_index = int(payload.get("face_index", 0))
+        except (TypeError, ValueError):
+            face_index = 0
+        return PickToHandleMapping.resolve(part_id, face_index, self._cad_parts[part_id].handles)
+
+    def _sync_tree_selection_from_pick(self, payload: dict) -> None:
+        candidates = self._tree_candidates_from_pick(payload)
+        if not candidates:
+            return
+        self._select_tree_item(self.project_tree, candidates)
+        self._select_tree_item(self.resource_panel.structure_tree, candidates)
+
+    @staticmethod
+    def _tree_candidates_from_pick(payload: dict) -> list[str]:
+        raw_values = [
+            str(payload.get(key, "")).strip()
+            for key in ("part_id", "face_part_id", "edge_part_id", "vertex_part_id")
+        ]
+        candidates: list[str] = []
+        for value in raw_values:
+            if not value or value in candidates:
+                continue
+            candidates.append(value)
+            stripped = value
+            for prefix in ("cad_", "link_"):
+                if stripped.startswith(prefix):
+                    stripped = stripped[len(prefix):]
+            if stripped and stripped not in candidates:
+                candidates.append(stripped)
+        return candidates
+
+    def _select_tree_item(self, tree: QTreeWidget, candidates: list[str]) -> bool:
+        root_count = tree.topLevelItemCount()
+        for idx in range(root_count):
+            item = self._find_tree_item(tree.topLevelItem(idx), candidates)
+            if item is not None:
+                tree.setCurrentItem(item)
+                return True
+        return False
+
+    def _find_tree_item(self, item: QTreeWidgetItem | None, candidates: list[str]) -> QTreeWidgetItem | None:
+        if item is None:
+            return None
+        text = item.text(0)
+        for candidate in candidates:
+            if candidate and (candidate == text or candidate in text or text in candidate):
+                return item
+        for idx in range(item.childCount()):
+            found = self._find_tree_item(item.child(idx), candidates)
+            if found is not None:
+                return found
+        return None
+
+    def _record_pick_edit(self, mapping: PickToHandleMapping) -> None:
+        action = EditAction(
+            handle_name=mapping.handle.name,
+            parameter="selection",
+            old_value=0.0,
+            new_value=float(len(self.edit_history.undo_stack) + 1),
+            timestamp=time.time(),
+        )
+        self.edit_history.push(action)
+
+    def undo_last_cad_edit(self) -> EditAction | None:
+        action = self.edit_history.undo()
+        if action is not None:
+            self._sync_view()
+            self._append_log(f"Undo CAD edit: {action.handle_name}.{action.parameter}")
+        return action
+
+    def redo_last_cad_edit(self) -> EditAction | None:
+        action = self.edit_history.redo()
+        if action is not None:
+            self._sync_view()
+            self._append_log(f"Redo CAD edit: {action.handle_name}.{action.parameter}")
+        return action
 
     def _toggle_viewport_backend(self) -> None:
         if isinstance(self.viewport.backend, SkeletonViewportBackend):
             self.viewport.set_viewport_backend(MeshViewportBackend())
             self.viewport.set_view_mode("3d-shell")
-            self._append_log("Viewport backend: 3D mesh")
+            self._append_log(tr("log.viewport_3d"))
         else:
             self.viewport.set_viewport_backend(SkeletonViewportBackend())
             self.viewport.set_view_mode("skeleton")
-            self._append_log("Viewport backend: 2D skeleton")
+            self._append_log(tr("log.viewport_2d"))
+
+    def reset_view(self) -> None:
+        self.viewport.reset_camera()
+        self._append_log(tr("log.viewport_reset"))
+
+    def set_camera_preset(self, preset_name: str) -> None:
+        self.viewport.set_camera_preset(preset_name)
+        self._append_log(f"Viewport camera preset: {preset_name}")
+
+    def set_wireframe(self, enabled: bool) -> None:
+        self.viewport.set_wireframe(enabled)
+        self._append_log(f"Viewport display mode: {'wireframe' if enabled else 'solid'}")
+
+    def export_viewport_screenshot(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export viewport screenshot",
+            str((self.project_root or Path.cwd()) / "viewport.png"),
+            "PNG images (*.png)",
+        )
+        if not path:
+            return
+        ok = self.viewport.export_screenshot(Path(path))
+        self._append_log(
+            tr("log.viewport_screenshot_saved", path)
+            if ok else tr("log.viewport_screenshot_failed", path)
+        )
 
     def _sync_view(self) -> None:
         self.viewport.set_joint_values(j.value() for j in self.joints)
@@ -1017,46 +1123,76 @@ class WorkspaceShell(QWidget):
         self.workflow_snapshot = build_workflow_status_snapshot()
         delta = compare_snapshots(previous, self.workflow_snapshot)
         self.connection_state.setText(self.workflow_snapshot.device.connection_state)
-        self.telemetry_box.setPlainText("\n".join(self.workflow_snapshot.telemetry_lines() + ([f"delta={delta.note}"] if delta.note else [])))
+        self.telemetry_card.refresh(self.workflow_snapshot)
         if delta.note:
-            self._append_log(f"Workflow snapshot updated: {delta.note}")
+            self._append_log(tr("log.snapshot_updated", delta.note))
 
     def apply_pose(self, pose: PosePreset) -> None:
-        for js, value in zip(self.joints, pose.values):
-            js.set_value(value)
+        if len(pose.values) != len(self.joints):
+            self._append_log(tr("log.pose_mismatch", pose.name, len(pose.values), len(self.joints)))
+            return
+        self._start_pose_animation(dict(zip((js.name for js in self.joints), pose.values)))
+        self._append_log(tr("log.pose_applied", pose.name))
+
+    def _start_pose_animation(self, target_values: dict[str, float]) -> None:
+        self._pose_start = {js.name: js.value() for js in self.joints}
+        self._pose_target = dict(target_values)
+        self._pose_elapsed_ms = 0.0
+        self._pose_timer.start()
+
+    def _advance_pose_animation(self) -> None:
+        self._pose_elapsed_ms += float(self._pose_timer.interval())
+        progress = self._pose_elapsed_ms / max(self._pose_duration_ms, 1.0)
+        values, done = interpolate_joint_values(
+            self._pose_start,
+            self._pose_target,
+            progress,
+        )
+        for js in self.joints:
+            if js.name in values:
+                js.set_value(values[js.name])
         self._sync_view()
-        self._append_log(f"Pose applied: {pose.name}")
+        if done or progress >= 1.0:
+            self._pose_timer.stop()
+            for js in self.joints:
+                if js.name in self._pose_target:
+                    js.set_value(self._pose_target[js.name])
+            self._sync_view()
 
     def reset_pose(self) -> None:
-        self.apply_pose(POSES[0])
+        for preset in POSES:
+            if preset.name == "Home":
+                self.apply_pose(preset)
+                return
+        self._append_log(tr("log.no_home_preset"))
 
     def copy_angles(self) -> None:
         text = ", ".join(f"{js.name}={js.value():.1f}" for js in self.joints)
         QApplication.clipboard().setText(text)
-        self._append_log("Joint angles copied to clipboard")
+        self._append_log(tr("log.angles_copied"))
 
     def _connect_device(self) -> None:
         port = self.port_combo.currentText()
         baud = self.baud_combo.currentText()
-        self.connection_state.setText(f"Connected to {port} @ {baud}")
+        self.connection_state.setText(tr("conn.connected_to", port, baud))
         self.connect_btn.setEnabled(False)
         self.disconnect_btn.setEnabled(True)
-        self.workflow_snapshot = build_workflow_status_snapshot(connection_state="Connected", last_command=self.workflow_snapshot.device.last_command)
+        self.workflow_snapshot = build_workflow_status_snapshot(connection_state=ConnectionState.CONNECTED, last_command=self.workflow_snapshot.device.last_command)
         self._refresh_workflow_panels()
-        self._append_log(f"Connected to {port} @ {baud}")
+        self._append_log(tr("log.connected_to", port, baud))
 
     def _disconnect_device(self) -> None:
-        self.connection_state.setText("Disconnected")
+        self.connection_state.setText(tr("conn.disconnected"))
         self.connect_btn.setEnabled(True)
         self.disconnect_btn.setEnabled(False)
-        self.workflow_snapshot = build_workflow_status_snapshot(connection_state="Disconnected", last_command=self.workflow_snapshot.device.last_command)
+        self.workflow_snapshot = build_workflow_status_snapshot(connection_state=ConnectionState.DISCONNECTED, last_command=self.workflow_snapshot.device.last_command)
         self._refresh_workflow_panels()
-        self._append_log("Device disconnected")
+        self._append_log(tr("log.device_disconnected"))
 
     def _send_command(self) -> None:
         command = self.command_box.text().strip()
         if not command:
-            self._append_log("Send command requested with empty payload")
+            self._append_log(tr("log.send_empty"))
             return
         self.workflow_snapshot = build_workflow_status_snapshot(
             connection_state=self.workflow_snapshot.device.connection_state,
@@ -1064,7 +1200,7 @@ class WorkspaceShell(QWidget):
             last_error=self.workflow_snapshot.device.last_error,
         )
         self._refresh_workflow_panels()
-        self._append_log(f"TX > {command}")
+        self._append_log(tr("log.tx_command", command))
         self.command_box.clear()
 
     def _append_log(self, message: str) -> None:

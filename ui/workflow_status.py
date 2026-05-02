@@ -3,6 +3,47 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
+class ConnectionState:
+    CONNECTED = "Connected"
+    DISCONNECTED = "Disconnected"
+    CONNECTING = "Connecting"
+    FAULT = "Fault"
+
+
+class ConnectionHealth:
+    READY = "ready"
+    BUSY = "busy"
+    CONNECTING = "connecting"
+    FAULT = "fault"
+    OFFLINE = "offline"
+
+    _HEALTH_MAP = {
+        (ConnectionState.CONNECTED, True): READY,
+        (ConnectionState.CONNECTED, False): BUSY,
+        (ConnectionState.CONNECTING, False): CONNECTING,
+        (ConnectionState.FAULT, False): FAULT,
+    }
+
+    @classmethod
+    def derive(cls, connection_state: str, command_ready: bool) -> str:
+        return cls._HEALTH_MAP.get((connection_state, command_ready), cls.OFFLINE)
+
+
+class MotionState:
+    STANDBY = "standby"
+    IDLE = "idle"
+    READY = "ready"
+    ACTIVE = "active"
+    HOMING = "homing"
+    ALARM = "alarm"
+
+    _HEALTHY = {STANDBY, IDLE, READY}
+
+    @classmethod
+    def is_healthy(cls, state: str) -> bool:
+        return state.lower() in cls._HEALTHY
+
+
 @dataclass(frozen=True)
 class DeviceConsoleStatus:
     connection_state: str
@@ -14,16 +55,7 @@ class DeviceConsoleStatus:
 
     @property
     def connection_health(self) -> str:
-        state = self.connection_state.lower()
-        if state == "connected" and self.command_ready:
-            return "ready"
-        if state == "connected":
-            return "busy"
-        if state == "connecting":
-            return "connecting"
-        if state == "fault":
-            return "fault"
-        return "offline"
+        return ConnectionHealth.derive(self.connection_state, self.command_ready)
 
 
 @dataclass(frozen=True)
@@ -78,11 +110,11 @@ class WorkflowStatusSnapshot:
     @property
     def telemetry_health(self) -> str:
         connection = self.device.connection_health
-        if connection in {"offline", "fault", "connecting"}:
+        if connection in {ConnectionHealth.OFFLINE, ConnectionHealth.FAULT, ConnectionHealth.CONNECTING}:
             return connection
         if self.telemetry.warnings:
             return "degraded"
-        if self.telemetry.motion_state.lower() not in {"standby", "idle", "ready"}:
+        if not MotionState.is_healthy(self.telemetry.motion_state):
             return "active"
         return "nominal"
 
@@ -97,18 +129,22 @@ class WorkflowStatusDelta:
     note: str = ""
 
 
+_DEVICE_FIELDS = ("connection_state", "port", "baud_rate", "command_ready", "last_command", "last_error")
+_TELEMETRY_FIELDS = ("heartbeat", "joint_count", "motion_state", "temperature_c", "supply_voltage_v", "warnings")
+
+
 def build_workflow_status_snapshot(
     *,
-    connection_state: str = "Disconnected",
+    connection_state: str = ConnectionState.DISCONNECTED,
     last_command: str = "",
     last_error: str = "",
     heartbeat: str = "idle",
-    motion_state: str = "standby",
+    motion_state: str = MotionState.STANDBY,
     temperature_c: float = 31.5,
     supply_voltage_v: float = 24.0,
     warnings: list[str] | None = None,
 ) -> WorkflowStatusSnapshot:
-    connected = connection_state.lower() == "connected"
+    connected = connection_state == ConnectionState.CONNECTED
     if warnings is None:
         warnings = ["telemetry bridge not connected"] if not connected else []
     device = DeviceConsoleStatus(
@@ -134,8 +170,21 @@ def compare_snapshots(previous: WorkflowStatusSnapshot, current: WorkflowStatusS
     connection_changed = previous.device.connection_state != current.device.connection_state
     telemetry_changed = previous.telemetry != current.telemetry
     note_parts: list[str] = []
+
     if connection_changed:
         note_parts.append(f"connection: {previous.device.connection_state} -> {current.device.connection_state}")
+
     if telemetry_changed:
-        note_parts.append("telemetry payload updated")
-    return WorkflowStatusDelta(connection_changed=connection_changed, telemetry_changed=telemetry_changed, note="; ".join(note_parts))
+        prev_t = previous.telemetry
+        curr_t = current.telemetry
+        for field in _TELEMETRY_FIELDS:
+            pv = getattr(prev_t, field)
+            cv = getattr(curr_t, field)
+            if pv != cv:
+                note_parts.append(f"{field}: {pv} -> {cv}")
+
+    return WorkflowStatusDelta(
+        connection_changed=connection_changed,
+        telemetry_changed=telemetry_changed,
+        note="; ".join(note_parts),
+    )
