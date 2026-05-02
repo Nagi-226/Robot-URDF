@@ -62,8 +62,8 @@ Treat the product as evolving from `v0.0.1` upward using a milestone-based versi
 
 ### Current tracked version
 
-- **Current version:** `v0.5.0`
-- **Reason:** the app has a stable desktop shell, URDF import/parsing, unified robot model abstractions, a viewport backend protocol, the CAD runway is visible in the main UI, the CAD editing demo and export/report bridge are in place, CAD-to-robot workflow linkage is established, telemetry/device snapshot linkage has been validated in the live workflow path, and the top navigation has been reorganized toward a horizontal command surface
+- **Current version:** `v0.7.0`
+- **Reason:** v0.6.7 is implemented as a verified URDF mesh viewport slice, and v0.6.8-v0.7.0 production paths are now in place: pick detail reporting, URDF visual meshes in the 3D viewport, FK-based part transforms, primitive fallback mesh generation, multi-light shader uniforms, preset pose tweening, viewport reset/wireframe/screenshot APIs, CAD sample preview mesh bridging, cone/capsule primitives, same-scene CAD+Robot rendering, tree/detail/viewport selection sync, undo/redo viewport refresh, and viewport state persistence
 - **Reference:** detailed milestone mapping lives in `VERSIONING.md`
 
 ## Current implementation state
@@ -77,16 +77,25 @@ Treat the product as evolving from `v0.0.1` upward using a milestone-based versi
 - CAD workflow link panel: `ui/cad_workspace.py`
 - Rendering backend protocol: `rendering.py` with pluggable backend architecture
 - Robot domain model: `robot_model.py` with RobotModel, JointSpec, ViewState
-- Kinematics & chain builder: `robot/` package
+- Kinematics & chain builder: `robot/` package (2D legacy + 3D FK with axis/origin/tree support)
+- I/O layer: `studio_io/` package (URDF parse/write, mesh load/export, CAD bridge)
+- Unified mesh data contract: `studio_io/mesh_data.py` (MeshData, MeshPart)
+- Format loaders: `studio_io/mesh_loader.py` (STL via trimesh/numpy-stl)
+- CAD-to-mesh bridge: `studio_io/cad_mesh_bridge.py` (optional CadQuery integration)
+- URDF export writer: `studio_io/urdf_writer.py`
 - Build helper: `build.ps1` / `run.ps1` / `start.bat`
-- PySide6-based desktop UI
+- **Launch note:** Win11 上 Windows Store 版 Python 沙箱限制无法启动 GUI（退出码 49），需使用标准安装的 Python312: `C:\Users\FJL03\AppData\Local\Programs\Python\Python312\python.exe`
+- PySide6 6.9.2-based desktop UI
 - Dark engineering visual language
 - URDF import, validation, parsing, and resource summary panel
 - Project tree, URDF structure tree, selection details panel, and joint controls
 - 2D skeleton viewport fallback with auto-centering
-- 3D placeholder viewport path via backend abstraction
+- 3D viewport via Mesh3DWidget with OpenGL shaders, orbit camera, and mesh loading
 - Backend-agnostic viewport architecture: RobotViewport is the chrome host, renderers supply the active render frame
-- Toggle-ready backend structure for future 2D/3D switching
+- Per-link display records and FK-based mesh positioning for 3D robot visualization
+- Dual-scale viewport system (SceneScale for CAD vs URDF modes)
+- Scene lighting preset with key/fill/rim/ambient/hemisphere
+- Dynamic joint slider panel rebuilt from parsed URDF joint data
 - Serial connection scaffold and command send field
 - Workflow snapshot bridge for device-console and telemetry state
 - CAD layer with full runway stack: handles, part scripts, export plans, topology, script generation, @cad conventions, feature editors, demo pipeline, report/summary, UI bridge, checklist, readiness checks, pipeline CLI, overview-only UI integration, edit demo, artifact descriptors, CAD-to-robot interop snapshot, and workflow link panel
@@ -112,7 +121,7 @@ Use a layered structure:
 - `robot/` for URDF parsing, kinematics, joint mapping, and pose logic
 - `rendering.py` and future backend modules for viewport rendering
 - `cad/` for CadQuery-based script generation, feature handles, export pipelines, and URDF/CAD interop
-- `io/` for serial, CAN, TCP, file import/export, and device adapters
+- `studio_io/` for serial, CAN, TCP, file import/export, and device adapters (renamed from `io/` to avoid stdlib collision)
 - `models/` for robot assets, URDFs, meshes, CAD scripts, and sample data
 - `assets/` for icons, themes, and static UI resources
 - `tests/` for behavior checks and regression coverage
@@ -233,4 +242,4 @@ Before making larger changes, first ask:
 
 ## Next best steps
 
-The safest next step after `v0.5.0` is to keep stabilizing the product with small verification-oriented changes only when a real issue or concrete gap appears. Avoid broad refactors until the next major capability need is explicit.
+The safest next step after `v0.7.0` is to harden the integrated 3D workbench: package URI resolution, material/alpha fidelity, large-scene picking performance, part visibility/opacity UI, and Windows exe packaging validation.

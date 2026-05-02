@@ -20,8 +20,8 @@ The product now unifies three layers:
 2. **Robot structure and visualization**
    - URDF import and parsing
    - Robot link/joint structure viewing
-   - 2D skeleton preview as the current fallback viewport
-   - 3D viewport backend abstraction ready for a future real renderer
+   - 2D skeleton preview as the fallback viewport
+   - Real 3D mesh viewport with URDF + CAD preview geometry, picking, and camera controls
 
 3. **Operator workflow and device tools**
    - Joint sliders and pose presets
@@ -53,17 +53,18 @@ py -3.12 main.py
 
 ## Current product version
 
-- Current tracked line: `v0.5.0`
+- Current tracked line: `v0.7.0`
 - The CAD runway is visible in the main UI, with overview, workflow link, edit demo, export metadata, and CAD-to-robot interop snapshot support
-- The telemetry and device-console snapshot chain is now validated in the live workflow path
+- The 3D workbench runway now includes multi-mesh OpenGL rendering, GLB/STL/URDF mesh data paths, FK-driven per-part transforms, picking foundations, joint animation primitives, and camera presets
+- The v0.7.0 layer now includes URDF visual meshes in the viewport, CAD preview meshes in the same scene, pick detail reporting, CAD handle resolution, undo/redo-driven viewport refresh, camera/wireframe/screenshot APIs, viewport state persistence, and expanded primitive mesh generation
 - The product remains stable and launchable while preserving the robot workspace as the primary interactive area
 
 ## What this prototype includes
 
 - Dark engineering desktop shell
 - 2D skeleton viewport with auto-centering and joint-driven kinematics
-- 3D placeholder viewport ready for a real backend swap-in
-- Pluggable rendering backend architecture
+- 3D mesh viewport with URDF visuals, CAD preview parts, picking, grid/axis chrome, and camera controls
+- Pluggable rendering backend architecture with 2D/3D switching
 - Joint sliders and pose presets (`Home`, `Reach`, `Inspect`)
 - Workspace browser scaffold
 - Project tree, URDF structure tree, selection details panel, and resource summary panel
@@ -180,7 +181,7 @@ py -3.12 main.py
 
 ## 当前版本
 
-- 当前版本线：`v0.5.0`
+- 当前版本线：`v0.7.0`
 - CAD 跑道已进入主界面，包含概览、工作流链接、编辑演示、导出元数据和 CAD 到机器人联动快照
 - telemetry 与设备控制台的状态链路已经在真实工作流路径中完成验证
 - 产品仍保持稳定可启动，同时保留机器人工作区作为主交互区域

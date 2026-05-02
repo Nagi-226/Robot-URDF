@@ -14,9 +14,7 @@ The CAD layer is intended to support:
 
 ## Current stage
 
-This package is intentionally small and skeletal while the project moves through the `v0.2.1-alpha` to `v0.4.0` runway.
-
-The current goal is to establish a stable architecture before wiring in a heavy CAD backend.
+This package is now stable and integrated into the main UI (28 modules, v0.5.x stabilization band). The runway (v0.2.1-alpha through v0.4.0) is complete. The current focus is hardening and production readiness.
 
 ## Current sample parts
 

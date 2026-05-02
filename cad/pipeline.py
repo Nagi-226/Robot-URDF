@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .artifact_writer import ArtifactDescriptor, ArtifactWriter, ArtifactWriteResult, PlaceholderArtifactWriter
-from .demo import build_demo_manifest
+from ._demo_factory import build_demo_manifest
 from .editors import CadEditInstruction, CadFeatureEditor
 from .generator import CadScriptGenerator
 from .manifest import CadManifest

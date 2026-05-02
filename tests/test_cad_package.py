@@ -314,6 +314,31 @@ class TestCadFeatureEditor:
         assert annotated.selector == h.selector
 
 
+class TestCadEditBridge:
+    def test_pick_to_handle_mapping_resolves_cad_part(self) -> None:
+        from cad.edit_bridge import PickToHandleMapping
+
+        part, _plan = build_base_mount_part()
+        mapping = PickToHandleMapping.resolve("cad_base_mount", 0, part.handles)
+
+        assert mapping is not None
+        assert mapping.pick_part_id == "cad_base_mount"
+        assert mapping.handle in part.handles
+
+    def test_edit_history_undo_redo(self) -> None:
+        from cad.edit_bridge import EditAction, EditHistory
+
+        history = EditHistory(max_depth=2)
+        first = EditAction("mount", "selection", 0.0, 1.0)
+        second = EditAction("edge", "selection", 0.0, 2.0)
+        history.push(first)
+        history.push(second)
+
+        assert history.undo() is second
+        assert history.redo() is second
+        assert history.can_undo is True
+
+
 class TestCadRunwayReport:
     def test_empty_report(self) -> None:
         r = CadRunwayReport()
@@ -340,3 +365,15 @@ class TestCadRunwayReport:
         s = ReportSection("test", ["a", "b", "c"])
         output = s.render()
         assert "[test]\na\nb\nc" == output
+
+
+class TestCadMeshBridge:
+    def test_sample_part_converts_to_preview_mesh(self) -> None:
+        from studio_io.cad_mesh_bridge import cad_part_to_mesh_data
+
+        part, _plan = build_base_mount_part()
+        mesh_data = cad_part_to_mesh_data(part)
+        assert mesh_data is not None
+        assert mesh_data.source_format == "cad-preview"
+        assert mesh_data.parts[0].id == "base_mount"
+        assert mesh_data.edge_indices is not None

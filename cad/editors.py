@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .handles import CadFeature, CadHandle
+from .handles import CadHandle
 from .part import CadPartScript
 
 

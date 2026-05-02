@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 exports/
+.venv/
+.robot_urdf_viewport_state.json
