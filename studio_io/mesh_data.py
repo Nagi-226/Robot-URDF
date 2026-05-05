@@ -23,6 +23,7 @@ class MeshPart:
     triangle_offset: int
     triangle_count: int
     color: tuple[float, float, float] | None = None
+    opacity: float = 1.0
     bounds_min: tuple[float, float, float] = (0.0, 0.0, 0.0)
     bounds_max: tuple[float, float, float] = (0.0, 0.0, 0.0)
     # 16-element flat row-major transform (for URDF assembly posing)

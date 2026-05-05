@@ -1,3 +1,4 @@
 pytest
 trimesh
 numpy-stl
+pyinstaller

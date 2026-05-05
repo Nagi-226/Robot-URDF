@@ -82,6 +82,29 @@ class TestSkeletonViewportBackend:
 
 
 class TestMeshViewportBackend:
+    def _triangle_mesh(self):
+        from studio_io.mesh_data import MeshData, MeshPart
+        vertices = np.array([
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ], dtype=np.float32)
+        indices = np.array([[0, 1, 2]], dtype=np.uint32)
+        normals = np.array([[0.0, 0.0, 1.0]] * 3, dtype=np.float32)
+        return MeshData(
+            vertices=vertices,
+            indices=indices,
+            normals=normals,
+            parts=[MeshPart(
+                id="tri",
+                name="triangle",
+                vertex_offset=0,
+                vertex_count=3,
+                triangle_offset=0,
+                triangle_count=1,
+            )],
+        )
+
     def test_construction(self):
         _require_qapp()
         from rendering import MeshViewportBackend
@@ -135,6 +158,42 @@ class TestMeshViewportBackend:
         assert state["distance"] == 3.0
         assert state["wireframe"] is True
         assert state["highlighted_item"] == "base_link"
+
+    def test_camera_preset_changes_capture_state(self):
+        _require_qapp()
+        from rendering import Mesh3DWidget
+
+        widget = Mesh3DWidget()
+        widget.set_camera_preset("front")
+        state = widget.capture_viewport_state()
+
+        assert state["azimuth"] == 0.0
+        assert state["elevation"] == 0.0
+
+    def test_display_records_filter_visibility_and_keep_opacity(self):
+        _require_qapp()
+        from rendering import DisplayRecord, Mesh3DWidget
+
+        widget = Mesh3DWidget()
+        visible = DisplayRecord(
+            part_id="visible",
+            link_name="visible",
+            mesh_data=self._triangle_mesh(),
+            opacity=0.35,
+            color_override=(1.0, 0.2, 0.1),
+        )
+        hidden = DisplayRecord(
+            part_id="hidden",
+            link_name="hidden",
+            mesh_data=self._triangle_mesh(),
+            visible=False,
+        )
+
+        widget.set_robot_scene("ReliabilityBot", [], [visible, hidden])
+
+        assert len(widget._part_draw_infos) == 1
+        assert widget._part_draw_infos[0]["part_id"] == "visible"
+        assert widget._part_draw_infos[0]["opacity"] == 0.35
 
 
 class TestViewportStatePersistence:
@@ -245,3 +304,53 @@ class TestUrdfMeshBuilder:
             assert mesh_data.vertex_count > 0
             assert mesh_data.triangle_count > 0
             assert mesh_data.edge_indices is not None
+
+    def test_package_uri_mesh_resolution(self):
+        import shutil
+        from pathlib import Path
+        from studio_io.urdf_mesh_builder import build_urdf_mesh_data
+
+        tmp_root = Path(".pytest-cache") / "package_uri_mesh_resolution"
+        if tmp_root.exists():
+            shutil.rmtree(tmp_root)
+        package_dir = tmp_root / "src" / "demo_robot"
+        mesh_dir = package_dir / "meshes"
+        urdf_dir = package_dir / "urdf"
+        try:
+            mesh_dir.mkdir(parents=True)
+            urdf_dir.mkdir(parents=True)
+            (mesh_dir / "tri.stl").write_text(
+                "\n".join([
+                    "solid tri",
+                    "facet normal 0 0 1",
+                    "outer loop",
+                    "vertex 0 0 0",
+                    "vertex 1 0 0",
+                    "vertex 0 1 0",
+                    "endloop",
+                    "endfacet",
+                    "endsolid tri",
+                ]),
+                encoding="utf-8",
+            )
+            urdf_path = urdf_dir / "robot.urdf"
+            urdf_path.write_text(
+                """<robot name="pkg_bot">
+  <material name="amber"><color rgba="1.0 0.5 0.2 0.4"/></material>
+  <link name="base">
+    <visual>
+      <geometry><mesh filename="package://demo_robot/meshes/tri.stl"/></geometry>
+      <material name="amber"/>
+    </visual>
+  </link>
+</robot>""",
+                encoding="utf-8",
+            )
+
+            mesh_data = build_urdf_mesh_data(urdf_path)
+
+            assert mesh_data is not None
+            assert mesh_data.parts[0].color == (1.0, 0.5, 0.2)
+            assert mesh_data.parts[0].opacity == 0.4
+        finally:
+            shutil.rmtree(tmp_root, ignore_errors=True)

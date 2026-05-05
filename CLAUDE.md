@@ -62,7 +62,7 @@ Treat the product as evolving from `v0.0.1` upward using a milestone-based versi
 
 ### Current tracked version
 
-- **Current version:** `v0.7.0-dev` (v0.7.0 features complete, v0.7.x polish + packaging band active)
+- **Current version:** `v0.7.5-dev` (v0.7.0 features complete; v0.7.1-v0.7.5 polish, HUD, packaging, onboarding, signing scaffold, and 3D reliability hardening active)
 - **Reason:** v0.7.0 delivers integrated 3D workspace with CAD+Robot same-scene rendering, full selection sync across viewport/detail-panel/trees, CPU raycast picking (face/edge/vertex → @cad handle → undo/redo), OpenGL screenshot export, camera presets/wireframe/reset wired to View menu, and viewport state persistence. The v0.7.1–v0.7.9 band is now active, covering UI polish (theme system, typography hierarchy, icon set), PyInstaller exe packaging, performance optimisation, test coverage expansion, and release candidate preparation. See VERSIONING.md for the full v0.7.x detailed development plan.
 - **Reference:** detailed milestone mapping lives in `VERSIONING.md`
 - **Reference:** detailed milestone mapping lives in `VERSIONING.md`
@@ -243,4 +243,4 @@ Before making larger changes, first ask:
 
 ## Next best steps
 
-The safest next step after `v0.7.0` is to harden the integrated 3D workbench: package URI resolution, material/alpha fidelity, large-scene picking performance, part visibility/opacity UI, and Windows exe packaging validation.
+The safest next step after `v0.7.5-dev` is release-grade validation: clean Win11 exe verification, release certificate signing, visual QA for icon/HUD/theme polish, large-scene picking performance, part visibility/opacity UI, and v0.7.6 profiling.

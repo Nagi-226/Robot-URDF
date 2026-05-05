@@ -6,7 +6,7 @@
 <img src="https://img.shields.io/badge/Platform-Windows%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white" alt="Windows 11">
 <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License: MIT">
 <img src="https://img.shields.io/badge/Tests-95%20passed-4ADE80?style=for-the-badge" alt="Tests: 95 passed">
-<img src="https://img.shields.io/badge/Version-v0.7.0--dev-9B59B6?style=for-the-badge" alt="Version v0.7.0-dev">
+<img src="https://img.shields.io/badge/Version-v0.7.5--dev-9B59B6?style=for-the-badge" alt="Version v0.7.5-dev">
 
 <br>
 <br>
@@ -182,6 +182,14 @@ py -3.12 main.py
 ```bash
 pytest tests/ -v
 ```
+
+### Build Windows EXE
+
+```powershell
+.\build.ps1 -Mode onefile -SkipInstall -SmokeTest
+```
+
+Packaging outputs `dist\RobotURDFStudio.exe`. For a debug-friendly folder build, use `.\build.ps1 -Mode onedir -SkipInstall -SmokeTest`. Dev signing is available through `scripts\sign_windows_dev.ps1`; see `packaging\RELEASE_CHECKLIST.md`.
 
 ## ⌨️ Key Bindings
 

@@ -8,13 +8,118 @@ kinematics.js.  Handles both mesh-file references and primitive geometries
 from __future__ import annotations
 
 import math
+import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 import numpy as np
 
 from studio_io.mesh_data import MeshData, MeshPart
 from studio_io.mesh_loader import build_edge_indices, build_primitive_mesh, load_mesh_auto
+
+
+def _package_search_roots(urdf_path: Path) -> list[Path]:
+    roots: list[Path] = [urdf_path.parent, *urdf_path.parents]
+    for env_name in ("ROS_PACKAGE_PATH", "AMENT_PREFIX_PATH", "COLCON_PREFIX_PATH"):
+        for raw in os.environ.get(env_name, "").split(os.pathsep):
+            if raw:
+                roots.append(Path(raw))
+    # Common ROS workspace convention: packages live under a sibling src dir.
+    roots.extend(parent / "src" for parent in urdf_path.parents)
+
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for root in roots:
+        try:
+            key = str(root.resolve())
+        except OSError:
+            key = str(root)
+        if key not in seen:
+            seen.add(key)
+            unique.append(root)
+    return unique
+
+
+def resolve_mesh_filename(
+    urdf_path: str | Path,
+    filename: str,
+    package_roots: list[str | Path] | None = None,
+) -> Path | None:
+    """Resolve URDF mesh filenames, including ROS-style package:// URIs."""
+    if not filename:
+        return None
+    urdf_path = Path(urdf_path)
+    uri_base = urdf_path.parent
+    parsed = urlparse(filename)
+
+    if parsed.scheme in ("", None):
+        path = Path(filename)
+        candidate = path if path.is_absolute() else uri_base / path
+        return candidate if candidate.is_file() else None
+
+    if parsed.scheme == "file":
+        candidate = Path(unquote(parsed.path))
+        return candidate if candidate.is_file() else None
+
+    if parsed.scheme != "package":
+        return None
+
+    package_name = parsed.netloc
+    rel_path = unquote(parsed.path.lstrip("/"))
+    if not package_name or not rel_path:
+        return None
+
+    roots = [Path(root) for root in (package_roots or [])]
+    roots.extend(_package_search_roots(urdf_path))
+    for root in roots:
+        candidates = []
+        if root.name == package_name:
+            candidates.append(root / rel_path)
+        candidates.append(root / package_name / rel_path)
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate
+    return None
+
+
+def _material_map(root: ET.Element) -> dict[str, tuple[float, float, float, float]]:
+    materials: dict[str, tuple[float, float, float, float]] = {}
+    for material in root.findall("material"):
+        name = material.attrib.get("name", "")
+        color = _parse_material_color(material)
+        if name and color is not None:
+            materials[name] = color
+    return materials
+
+
+def _parse_material_color(element: ET.Element | None) -> tuple[float, float, float, float] | None:
+    if element is None:
+        return None
+    color = element.find("color")
+    if color is None:
+        return None
+    rgba = color.attrib.get("rgba", "").split()
+    if len(rgba) < 3:
+        return None
+    values = [float(v) for v in rgba[:4]]
+    if len(values) == 3:
+        values.append(1.0)
+    return tuple(max(0.0, min(1.0, v)) for v in values)  # type: ignore[return-value]
+
+
+def _visual_material(
+    visual: ET.Element,
+    materials: dict[str, tuple[float, float, float, float]],
+) -> tuple[float, float, float, float] | None:
+    material = visual.find("material")
+    if material is None:
+        return None
+    direct = _parse_material_color(material)
+    if direct is not None:
+        return direct
+    name = material.attrib.get("name", "")
+    return materials.get(name)
 
 
 def _parse_origin(element: ET.Element) -> tuple[tuple[float, ...], tuple[float, ...]]:
@@ -94,6 +199,7 @@ def build_urdf_mesh_data(urdf_path: str | Path) -> MeshData | None:
         root = ET.parse(urdf_path).getroot()
     except (ET.ParseError, OSError):
         return None
+    materials = _material_map(root)
 
     all_verts: list[np.ndarray] = []
     all_faces: list[np.ndarray] = []
@@ -101,7 +207,6 @@ def build_urdf_mesh_data(urdf_path: str | Path) -> MeshData | None:
     parts: list[MeshPart] = []
     v_offset = 0
     t_offset = 0
-    uri_base = urdf_path.parent
 
     for link in root.findall(".//link"):
         link_name = link.attrib.get("name", "unnamed_link")
@@ -117,11 +222,8 @@ def build_urdf_mesh_data(urdf_path: str | Path) -> MeshData | None:
             mesh_elem = geometry.find("mesh")
             if mesh_elem is not None:
                 filename = mesh_elem.attrib.get("filename", "")
-                if filename.startswith("package://"):
-                    # Strip package:// prefix
-                    filename = filename.split("//", 1)[1] if "//" in filename else filename
-                mesh_path = uri_base / filename
-                if mesh_path.is_file():
+                mesh_path = resolve_mesh_filename(urdf_path, filename)
+                if mesh_path is not None and mesh_path.is_file():
                     mesh_data = load_mesh_auto(mesh_path)
 
             # Check for primitives
@@ -147,6 +249,9 @@ def build_urdf_mesh_data(urdf_path: str | Path) -> MeshData | None:
             # Apply visual origin transform
             vis_xyz, vis_rpy = _parse_origin(visual)
             local_transform = _origin_to_matrix(vis_xyz, vis_rpy)
+            material = _visual_material(visual, materials)
+            color = material[:3] if material is not None else None
+            opacity = material[3] if material is not None else 1.0
 
             # Transform bounds
             bmin, bmax = _transform_bounds(
@@ -165,6 +270,8 @@ def build_urdf_mesh_data(urdf_path: str | Path) -> MeshData | None:
                 vertex_count=len(mesh_data.vertices),
                 triangle_offset=t_offset,
                 triangle_count=len(mesh_data.indices),
+                color=color,
+                opacity=opacity,
                 bounds_min=bmin,
                 bounds_max=bmax,
                 transform=local_transform,

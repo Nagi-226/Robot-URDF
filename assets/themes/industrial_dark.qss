@@ -1,0 +1,161 @@
+﻿/* Robot URDF Studio v0.7.1 theme: Dark Industrial Precision */
+QWidget {
+    background: #070b13;
+    color: #e6edf8;
+    font-family: "Segoe UI";
+    font-size: 10pt;
+}
+QMainWindow, QDialog {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #070b13, stop:0.55 #0b1220, stop:1 #101827);
+}
+#TopNav {
+    background: rgba(12, 16, 25, 0.98);
+    border: 1px solid rgba(100, 115, 140, 0.22);
+    border-radius: 12px;
+}
+#TopNavButton {
+    min-width: 70px;
+    color: #d9e2f2;
+    background: rgba(26, 35, 54, 0.92);
+    border: 1px solid rgba(104, 118, 145, 0.22);
+    border-radius: 10px;
+    padding: 5px 10px;
+    font-weight: 600;
+}
+#TopNavButton:hover {
+    border-color: #4f8cff;
+    background: rgba(33, 46, 72, 0.96);
+}
+#TopNavButton::menu-indicator { image: none; }
+#TopNavSummary {
+    color: #9ca9c0;
+    padding-right: 8px;
+    font-family: "Cascadia Code", "JetBrains Mono", monospace;
+    font-size: 9pt;
+}
+#SidePanel, QScrollArea#SidePanel {
+    background: rgba(10, 14, 24, 0.94);
+    border: 1px solid rgba(122, 139, 174, 0.24);
+    border-radius: 18px;
+}
+QScrollArea#SidePanel > QWidget > QWidget { background: transparent; }
+#Banner {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(30, 40, 64, 0.96), stop:1 rgba(14, 19, 31, 0.98));
+    border: 1px solid rgba(154, 168, 198, 0.18);
+    border-radius: 16px;
+}
+#BannerTitle {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+}
+#BannerSubtitle { color: #b3bfd8; }
+#BannerChip {
+    background: rgba(39, 50, 74, 0.95);
+    color: #dce5f7;
+    border: 1px solid rgba(130, 146, 182, 0.25);
+    border-radius: 999px;
+    padding: 2px 8px;
+}
+#SectionTitle {
+    color: #c7d2e8;
+    font-size: 11pt;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+}
+#MutedLabel, #CardBody { color: #a7b2c9; }
+#ConnectionState {
+    color: #d6def1;
+    font-weight: 600;
+    padding: 2px 0;
+}
+#Card {
+    background: rgba(20, 28, 44, 0.94);
+    border: 1px solid rgba(122, 139, 174, 0.14);
+    border-radius: 12px;
+}
+#CardTitle { font-weight: 700; }
+QListWidget, QLineEdit, QComboBox, QTextEdit, QTreeWidget {
+    background: #0f1626;
+    border: 1px solid #394867;
+    border-radius: 10px;
+    padding: 5px 7px;
+    color: #e6edf8;
+    selection-background-color: #2d5f9f;
+}
+QPushButton {
+    background: #1f2a42;
+    border: 1px solid #40506f;
+    border-radius: 10px;
+    padding: 7px 10px;
+    font-weight: 600;
+}
+QPushButton:hover { background: #293753; border-color: #4f8cff; }
+QPushButton:disabled { color: #66708b; background: #151d2e; }
+QMenu {
+    background: #0b1220;
+    border: 1px solid #394867;
+    border-radius: 10px;
+    padding: 6px;
+}
+QMenu::item { padding: 6px 22px; border-radius: 6px; }
+QMenu::item:selected { background: #1f3456; color: #f5f8ff; }
+QSlider::groove:horizontal {
+    border-radius: 4px;
+    height: 6px;
+    background: #27324a;
+}
+QSlider::handle:horizontal {
+    width: 18px;
+    margin: -6px 0;
+    border-radius: 9px;
+    background: #d8e1f5;
+}
+QDoubleSpinBox {
+    background: #11182a;
+    border: 1px solid #394867;
+    border-radius: 8px;
+    padding: 4px 8px;
+    min-width: 78px;
+    font-family: "Cascadia Code", "JetBrains Mono", monospace;
+}
+QTabWidget::pane {
+    border: 1px solid #394867;
+    border-radius: 10px;
+    top: -1px;
+}
+QTabBar::tab {
+    background: #1b2437;
+    padding: 8px 14px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    margin-right: 2px;
+}
+QTabBar::tab:selected { background: #27324a; color: #ffffff; }
+QScrollBar:vertical {
+    background: #0f1626;
+    width: 8px;
+    margin: 4px 2px 4px 0;
+    border-radius: 4px;
+}
+QScrollBar::handle:vertical {
+    background: #394867;
+    border-radius: 4px;
+    min-height: 30px;
+}
+QScrollBar::handle:vertical:hover { background: #4a5d82; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
+QToolTip {
+    background: rgba(10, 14, 24, 0.96);
+    color: #edf4ff;
+    border: 1px solid #4f8cff;
+    border-radius: 8px;
+    padding: 6px;
+}
+QStatusBar {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0b1220, stop:1 #121d2f);
+    color: #a7b2c9;
+    border-top: 1px solid rgba(122, 139, 174, 0.24);
+}

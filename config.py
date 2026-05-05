@@ -25,5 +25,10 @@ class StudioConfig:
     joint_angle_scale: float = 0.45
     base_angle_degrees: float = -90.0
 
+    default_theme: str = "industrial_dark"
+    preferences_path: str = ".robot_urdf_preferences.json"
+    crash_log_dir: str = "logs/crashes"
+    update_check_enabled: bool = False
+
 
 CONFIG = StudioConfig()

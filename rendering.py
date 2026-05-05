@@ -257,6 +257,7 @@ uniform vec3 u_hemisphere_sky;
 uniform vec3 u_hemisphere_ground;
 uniform float u_hemisphere_intensity;
 uniform float u_emissive;
+uniform float u_opacity;
 void main() {
     vec3 N = normalize(v_normal);
     vec3 key = vec3(max(dot(N, normalize(u_key_light_dir)), 0.0)) * u_key_light_intensity;
@@ -266,7 +267,7 @@ void main() {
     vec3 ambient = u_ambient_color * u_ambient_intensity;
     vec3 lighting = ambient + key + fill + rim + hemi;
     vec3 color = min(u_color * lighting + u_color * u_emissive, vec3(1.0));
-    gl_FragColor = vec4(color, 1.0);
+    gl_FragColor = vec4(color, u_opacity);
 }
 """
 
@@ -282,6 +283,9 @@ _GL_FLOAT = 0x1406
 _GL_FRONT_AND_BACK = 0x0408
 _GL_LINE = 0x1B01
 _GL_FILL = 0x1B02
+_GL_BLEND = 0x0BE2
+_GL_SRC_ALPHA = 0x0302
+_GL_ONE_MINUS_SRC_ALPHA = 0x0303
 
 
 class Mesh3DWidget(QOpenGLWidget):
@@ -321,6 +325,9 @@ class Mesh3DWidget(QOpenGLWidget):
         self._pan_x = 0.0
         self._pan_y = 0.0
         self._center = QVector3D(0, 0, 0)
+        self._scene_extent = 1.0
+        self._scene_bounds_signature: tuple[float, ...] | None = None
+        self._camera_user_modified = False
 
         # Mouse
         self._last_pos = None
@@ -423,7 +430,10 @@ class Mesh3DWidget(QOpenGLWidget):
         then tracks per-part draw ranges and model matrices.
         """
         self._part_draw_infos = []
-        records_with_mesh = [r for r in self._display_records if r.mesh_data is not None]
+        records_with_mesh = [
+            r for r in self._display_records
+            if r.visible and r.mesh_data is not None and r.opacity > 0.0
+        ]
         if not records_with_mesh:
             return
 
@@ -446,6 +456,7 @@ class Mesh3DWidget(QOpenGLWidget):
                 "part_id": rec.part_id,
                 "link_name": rec.link_name,
                 "color_override": rec.color_override,
+                "opacity": max(0.0, min(1.0, rec.opacity)),
                 "vertex_start": vertex_offset,
                 "vertex_count": md.indices.size,
                 "world_transform": rec.world_transform,
@@ -588,6 +599,8 @@ class Mesh3DWidget(QOpenGLWidget):
         funcs.glClearColor(0.05, 0.067, 0.125, 1.0)  # #0d1120
         funcs.glEnable(_GL_DEPTH_TEST)
         funcs.glEnable(_GL_CULL_FACE)
+        funcs.glEnable(_GL_BLEND)
+        funcs.glBlendFunc(_GL_SRC_ALPHA, _GL_ONE_MINUS_SRC_ALPHA)
 
         self._program = QOpenGLShaderProgram()
         self._program.addShaderFromSourceCode(QOpenGLShader.Vertex, _VERT_SHADER)
@@ -636,6 +649,7 @@ class Mesh3DWidget(QOpenGLWidget):
             self._program.setUniformValue('u_mvp', mvp)
             self._program.setUniformValue('u_model', model)
             self._program.setUniformValue('u_color', QVector3D(*self._MESH_COLOR))
+            self._program.setUniformValue(self._program.uniformLocation('u_opacity'), 1.0)
             self._program.setUniformValue(self._program.uniformLocation('u_emissive'), 0.0)
             funcs.glDrawArrays(_GL_TRIANGLES, 0, self._draw_count)
 
@@ -690,6 +704,10 @@ class Mesh3DWidget(QOpenGLWidget):
             self._program.setUniformValue('u_model', model)
             self._program.setUniformValue('u_color', QVector3D(*col))
             self._program.setUniformValue(
+                self._program.uniformLocation('u_opacity'),
+                float(di.get("opacity", 1.0)),
+            )
+            self._program.setUniformValue(
                 self._program.uniformLocation('u_emissive'),
                 self._emissive_for_part(di.get("part_id", ""), di.get("link_name", "")),
             )
@@ -728,6 +746,7 @@ class Mesh3DWidget(QOpenGLWidget):
             self._program.setUniformValue('u_mvp', mvp)
             self._program.setUniformValue('u_model', model)
             self._program.setUniformValue('u_color', QVector3D(*color))
+            self._program.setUniformValue(self._program.uniformLocation('u_opacity'), 1.0)
             self._program.setUniformValue(self._program.uniformLocation('u_emissive'), emissive)
             funcs.glDrawArrays(_GL_TRIANGLES, draw_start, 3)
 
@@ -1303,6 +1322,7 @@ class MeshViewportBackend:
                 mesh_data=part_mesh,
                 visible=True,
                 color_override=part.color or palette[index % len(palette)],
+                opacity=part.opacity,
                 world_transform=entry.get("world_transform"),
             ))
         return records
@@ -1330,6 +1350,8 @@ class MeshViewportBackend:
             vertex_count=len(vertices),
             triangle_offset=0,
             triangle_count=len(indices),
+            color=part.color,
+            opacity=part.opacity,
             edge_index_offset=0,
             edge_index_count=len(edge_indices),
             bounds_min=part.bounds_min,

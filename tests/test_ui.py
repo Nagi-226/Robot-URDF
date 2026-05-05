@@ -189,6 +189,57 @@ class TestViewportControlApi:
         viewport.set_wireframe(True)
         viewport.set_camera_preset("isometric")
 
+    def test_robot_viewport_hud_metrics_are_populated(self):
+        _require_qapp()
+        from ui.shell import RobotViewport
+
+        viewport = RobotViewport()
+        metrics = viewport.hud_metrics()
+
+        assert metrics["model"]
+        assert metrics["joints"].isdigit()
+        assert metrics["camera"] in {"skeleton", "orbit"}
+        assert "FPS" in metrics["fps"]
+
+
+class TestThemeManager:
+    def test_theme_definitions_load_qss(self):
+        from app.theme import ThemeManager
+
+        manager = ThemeManager.instance()
+        keys = {theme.key for theme in manager.available_themes()}
+
+        assert {"industrial_dark", "high_contrast", "compact"}.issubset(keys)
+        assert "#TopNav" in manager.load_qss("industrial_dark")
+
+    def test_unknown_theme_falls_back_to_default(self):
+        from app.theme import ThemeManager
+
+        qss = ThemeManager.instance().load_qss("missing_theme")
+
+        assert "Dark Industrial Precision" in qss
+
+
+class TestUpdateCheck:
+    def test_version_tuple_and_comparison(self):
+        from app.update_check import is_newer_version, version_tuple
+
+        assert version_tuple("v0.7.5") == (0, 7, 5)
+        assert is_newer_version("v0.7.6", "v0.7.5") is True
+        assert is_newer_version("v0.7.5", "v0.7.5") is False
+
+
+class TestOnboarding:
+    def test_onboarding_dialog_constructs(self):
+        _require_qapp()
+        from app.onboarding import OnboardingDialog
+
+        dialog = OnboardingDialog()
+
+        assert dialog.windowTitle() == "Robot URDF Studio Setup"
+        assert dialog.language.count() == 2
+        assert dialog.theme.count() >= 3
+
 
 class TestWorkspaceCadViewportIntegration:
     def test_pick_candidates_strip_viewport_prefixes(self):

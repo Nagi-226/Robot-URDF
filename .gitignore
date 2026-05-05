@@ -3,3 +3,7 @@ __pycache__/
 exports/
 .venv/
 .robot_urdf_viewport_state.json
+.robot_urdf_preferences.json
+build/
+dist/
+logs/

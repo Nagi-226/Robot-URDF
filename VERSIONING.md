@@ -15,7 +15,7 @@ We use semantic-style product versions for the desktop workbench.
 
 ## Current version
 
-Current product version should be treated as `v0.7.0`.
+Current product version should be treated as `v0.7.5-dev`.
 
 Reasoning:
 
@@ -445,6 +445,18 @@ Each sub-version targets one thin vertical slice and must keep the app launchabl
 - First-launch experience: minimal onboarding wizard (language select + sample model load)
 - Sign the exe with self-signed certificate (dev) / code signing cert (release)
 - Windows SmartScreen compatibility: proper PE metadata, no false positive triggers
+
+**v0.7.1-v0.7.5 dev foundation active (2026-05-03):**
+- Theme system is now code-backed through `app/theme.py`, `assets/themes/`, persisted preferences, and View-menu switching.
+- URDF mesh loading resolves ROS-style `package://` mesh paths across URDF parents, workspace `src/`, and ROS environment roots.
+- URDF material RGB/alpha is preserved into `MeshPart` / `DisplayRecord`, and the OpenGL shader exposes alpha blending.
+- Packaging path now has `RobotURDFStudio.spec`, `version_info.txt`, `assets/icon.ico`, `build.ps1` onefile/onedir modes, CI workflow, and `scripts/package_self_test.py`.
+- v0.7.3 visual chrome has a repo-native SVG icon set under `assets/icons/`, TopNav icons, and a transparent corner HUD over both 2D and 3D backends.
+- v0.7.5 onboarding and signing scaffolding are active through `app/onboarding.py`, `scripts/sign_windows_dev.ps1`, and `packaging/RELEASE_CHECKLIST.md`.
+- Crash logging and optional update-version comparison helpers are present for packaged-build hardening.
+- Real PyInstaller onefile and onedir builds were executed on 2026-05-03 and both package smoke tests passed. `dist/RobotURDFStudio.exe` was produced at about 245 MB. A dev self-signed signature was applied; Windows reports the expected untrusted-root warning until the dev cert is trusted or replaced by a release certificate.
+- 3D reliability tests now cover camera preset state, display-record visibility filtering, opacity propagation, package URI mesh resolution, and URDF material alpha. Test count is 111 passing.
+- Remaining v0.7.5 work before release: clean Win11 host verification, release certificate signing, and user acceptance screenshots.
 
 ### 🔬 v0.7.6 — Performance & memory optimisation
 

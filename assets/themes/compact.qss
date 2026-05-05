@@ -1,0 +1,47 @@
+﻿/* Robot URDF Studio v0.7.1 theme: Compact */
+QWidget {
+    background: #080d15;
+    color: #dfe7f4;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+}
+QMainWindow, QDialog { background: #080d15; }
+#TopNav, #SidePanel, QScrollArea#SidePanel, #Card, #Banner {
+    background: rgba(12, 18, 29, 0.96);
+    border: 1px solid rgba(122, 139, 174, 0.22);
+    border-radius: 9px;
+}
+#TopNavButton, QPushButton {
+    min-width: 58px;
+    color: #dfe7f4;
+    background: #182235;
+    border: 1px solid #374765;
+    border-radius: 7px;
+    padding: 4px 8px;
+    font-weight: 600;
+}
+#TopNavButton:hover, QPushButton:hover { background: #22314c; }
+#TopNavButton::menu-indicator { image: none; }
+#TopNavSummary { color: #94a3bb; font-family: "Cascadia Code", "JetBrains Mono", monospace; font-size: 8pt; }
+#SectionTitle { color: #c6d1e4; font-size: 10pt; font-weight: 700; letter-spacing: 0.4px; }
+#MutedLabel, #CardBody, #BannerSubtitle { color: #9eabc0; }
+#BannerTitle { font-size: 15px; font-weight: 800; }
+#BannerChip { background: #202d43; border-radius: 999px; padding: 1px 6px; }
+QListWidget, QLineEdit, QComboBox, QTextEdit, QTreeWidget, QDoubleSpinBox {
+    background: #0f1624;
+    border: 1px solid #34445f;
+    border-radius: 7px;
+    padding: 3px 6px;
+    color: #dfe7f4;
+}
+QMenu { background: #0b1220; border: 1px solid #34445f; padding: 4px; }
+QMenu::item { padding: 4px 18px; border-radius: 4px; }
+QMenu::item:selected { background: #1f3456; }
+QSlider::groove:horizontal { height: 5px; background: #27324a; border-radius: 3px; }
+QSlider::handle:horizontal { width: 14px; margin: -5px 0; border-radius: 7px; background: #d8e1f5; }
+QTabBar::tab { background: #1b2437; padding: 5px 10px; margin-right: 1px; }
+QTabBar::tab:selected { background: #27324a; }
+QScrollBar:vertical { background: #0f1624; width: 7px; }
+QScrollBar::handle:vertical { background: #394867; border-radius: 3px; min-height: 24px; }
+QToolTip { background: #0b1220; color: #edf4ff; border: 1px solid #4f8cff; padding: 5px; }
+QStatusBar { background: #0b1220; color: #9eabc0; border-top: 1px solid #34445f; }

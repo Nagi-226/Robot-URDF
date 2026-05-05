@@ -57,6 +57,7 @@ def _build_dicts() -> None:
         # ── View menu ──
         ("view.toggle_2d3d",    "Toggle 2D / 3D",   "切换 2D / 3D"),
         ("view.reset_view",     "Reset View",       "重置视图"),
+        ("view.theme",          "Theme",            "主题"),
         ("view.language",       "Language",         "语言"),
         ("view.language_en",    "English",          "English"),
         ("view.language_zh",    "中文",             "中文"),

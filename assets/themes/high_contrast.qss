@@ -1,0 +1,51 @@
+﻿/* Robot URDF Studio v0.7.1 theme: High Contrast */
+QWidget {
+    background: #000000;
+    color: #ffffff;
+    font-family: "Segoe UI";
+    font-size: 10pt;
+}
+QMainWindow, QDialog { background: #000000; }
+#TopNav, #SidePanel, QScrollArea#SidePanel, #Card, #Banner {
+    background: #050505;
+    border: 2px solid #8fb8ff;
+    border-radius: 10px;
+}
+#TopNavButton, QPushButton {
+    color: #ffffff;
+    background: #111827;
+    border: 2px solid #8fb8ff;
+    border-radius: 8px;
+    padding: 7px 11px;
+    font-weight: 700;
+}
+#TopNavButton:hover, QPushButton:hover { background: #173b73; }
+#TopNavButton::menu-indicator { image: none; }
+#TopNavSummary, #MutedLabel, #CardBody, #BannerSubtitle { color: #d7e5ff; }
+#SectionTitle, #BannerTitle { color: #ffffff; font-weight: 800; letter-spacing: 0.7px; }
+#BannerChip {
+    background: #102a4f;
+    color: #ffffff;
+    border: 1px solid #ffffff;
+    border-radius: 999px;
+    padding: 3px 9px;
+}
+QListWidget, QLineEdit, QComboBox, QTextEdit, QTreeWidget, QDoubleSpinBox {
+    background: #000000;
+    border: 2px solid #8fb8ff;
+    border-radius: 8px;
+    padding: 6px 8px;
+    color: #ffffff;
+    selection-background-color: #005fcc;
+}
+QMenu { background: #000000; border: 2px solid #8fb8ff; padding: 6px; }
+QMenu::item { padding: 7px 24px; border-radius: 4px; }
+QMenu::item:selected { background: #005fcc; }
+QSlider::groove:horizontal { height: 8px; background: #34445f; border-radius: 4px; }
+QSlider::handle:horizontal { width: 20px; margin: -7px 0; border-radius: 10px; background: #ffffff; }
+QTabBar::tab { background: #111827; padding: 8px 14px; border: 1px solid #8fb8ff; }
+QTabBar::tab:selected { background: #005fcc; }
+QScrollBar:vertical { background: #000000; width: 12px; }
+QScrollBar::handle:vertical { background: #8fb8ff; border-radius: 6px; min-height: 30px; }
+QToolTip { background: #000000; color: #ffffff; border: 2px solid #ffffff; padding: 7px; }
+QStatusBar { background: #000000; color: #ffffff; border-top: 2px solid #8fb8ff; }

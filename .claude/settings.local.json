@@ -116,7 +116,15 @@
       "Bash(\"C:/Users/FJL03/AppData/Local/Programs/Python/Python312/python.exe\" main.py)",
       "Bash(\"C:/Users/FJL03/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/ -q)",
       "Bash(\"C:/Users/FJL03/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/ -v --tb=no)",
-      "Bash(\"C:/Users/FJL03/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/ -v --tb=short)"
+      "Bash(\"C:/Users/FJL03/AppData/Local/Programs/Python/Python312/python.exe\" -m pytest tests/ -v --tb=short)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(& \"E:\\\\Github Project\\\\Robot URDF\\\\.venv\\\\Scripts\\\\python.exe\" -c \"import PySide6; print\\(PySide6.__version__\\)\" 2>&1)",
+      "PowerShell(& \"E:\\\\Github Project\\\\Robot URDF\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest \"E:\\\\Github Project\\\\Robot URDF\\\\tests\" --collect-only 2>&1)",
+      "Bash(.venv\\\\Scripts\\\\python.exe -m pytest tests/ -v --tb=short)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ -v --tb=short)",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "PowerShell(Get-ChildItem -Path \".\" -Recurse -File | Where-Object { $_.Length -gt 5MB } | Select-Object FullName, @{N='SizeMB';E={[math]::Round\\($_.Length/1MB,2\\)}} | Format-Table -AutoSize、)",
+      "PowerShell(git add *)"
     ]
   }
 }

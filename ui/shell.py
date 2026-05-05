@@ -41,6 +41,7 @@ from ui.workflow_status import ConnectionState, build_workflow_status_snapshot, 
 from robot.animation import interpolate_joint_values
 from cad.edit_bridge import EditAction, EditHistory, PickToHandleMapping
 from cad.sample_parts import build_base_mount_part, build_wrist_link_part
+from app.theme import ThemeManager
 
 
 RECENT_PROJECTS = ["AtlasArm / production-cell-01", "DeltaBot / calibration-suite", "FieldRig / embedded-testbench"]
@@ -173,6 +174,9 @@ class RobotViewport(QFrame):
         self.model_path = tr("robot.no_model")
         self.backend: ViewportBackend = SkeletonViewportBackend()
         self._overlay = ViewportOverlay(title=self.robot_name, subtitle=tr("robot.no_model"))
+        self._fps = 0.0
+        self._fps_visible = True
+        self._last_frame_time = time.perf_counter()
         self.setMinimumSize(CONFIG.viewport_min_width, CONFIG.viewport_min_height)
         self.setFrameShape(QFrame.Shape.StyledPanel)
 
@@ -180,6 +184,8 @@ class RobotViewport(QFrame):
         self._scene_layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self._scene_layout)
         self._install_backend_widget()
+        self.hud = ViewportHudOverlay(self)
+        self.hud.raise_()
 
     def _install_backend_widget(self) -> None:
         while self._scene_layout.count():
@@ -191,6 +197,8 @@ class RobotViewport(QFrame):
         if hasattr(widget, "selection_changed"):
             widget.selection_changed.connect(self.pick_changed.emit)
         self._scene_layout.addWidget(widget)
+        if hasattr(self, "hud"):
+            self.hud.raise_()
 
     def set_joint_values(self, values: Iterable[float]) -> None:
         self.values = list(values)
@@ -221,10 +229,16 @@ class RobotViewport(QFrame):
         self.update()
 
     def _refresh_render_frame(self) -> None:
+        now = time.perf_counter()
+        elapsed = max(now - self._last_frame_time, 1e-6)
+        self._fps = 0.85 * self._fps + 0.15 * (1.0 / elapsed) if self._fps else 1.0 / elapsed
+        self._last_frame_time = now
         model = self.urdf_summary or RobotModel(name=self.robot_name)
         state = ViewState(model_path=self.model_path, selected_item=self.selected_item, selection_kind=self.selection_kind, viewport_mode=self.view_mode)
         self.backend.update_frame(model, state, list(self.values))
         self._overlay = self.backend.get_overlay()
+        if hasattr(self, "hud"):
+            self.hud.update()
 
     def set_model_path(self, path_text: str) -> None:
         self.model_path = path_text
@@ -259,6 +273,59 @@ class RobotViewport(QFrame):
         if hasattr(widget, "export_screenshot"):
             return bool(widget.export_screenshot(path))
         return False
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        if hasattr(self, "hud"):
+            self.hud.setGeometry(self.rect())
+            self.hud.raise_()
+
+    def hud_metrics(self) -> dict[str, str]:
+        model = self.urdf_summary or RobotModel(name=self.robot_name)
+        mode = "orbit" if self.view_mode != "skeleton" else "skeleton"
+        scale = "URDF m" if self.model_path.lower().endswith((".urdf", ".xacro", ".xml")) else "CAD mm"
+        return {
+            "model": model.name or tr("robot.workspace_name"),
+            "joints": str(model.joint_count or len(self.values)),
+            "camera": mode,
+            "fps": f"{self._fps:.0f} FPS" if self._fps_visible else "",
+            "scale": scale,
+            "selected": self.selected_item,
+        }
+
+
+class ViewportHudOverlay(QWidget):
+    """Transparent corner HUD that remains visible above 2D and 3D backends."""
+
+    def __init__(self, viewport: RobotViewport) -> None:
+        super().__init__(viewport)
+        self.viewport = viewport
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+
+    def _draw_hud_card(self, painter: QPainter, x: int, y: int, w: int, lines: list[str]) -> None:
+        h = 24 + 18 * max(0, len(lines) - 1)
+        painter.setBrush(QColor(10, 14, 24, 186))
+        painter.setPen(QPen(QColor(95, 120, 165, 170), 1))
+        painter.drawRoundedRect(x, y, w, h, 10, 10)
+        for index, line in enumerate(lines):
+            painter.setPen(QPen(QColor("#e6edf8" if index == 0 else "#aebbd0"), 1))
+            painter.drawText(x + 10, y + 17 + index * 18, line)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        metrics = self.viewport.hud_metrics()
+        rect = self.rect()
+
+        self._draw_hud_card(
+            painter, 14, 14, 260,
+            [metrics["model"], f"{metrics['joints']} joints | selected: {metrics['selected']}"],
+        )
+        if metrics["fps"]:
+            self._draw_hud_card(painter, rect.width() - 116, 14, 102, [metrics["fps"]])
+        self._draw_hud_card(painter, 14, rect.height() - 52, 146, [f"camera: {metrics['camera']}"])
+        self._draw_hud_card(painter, rect.width() - 126, rect.height() - 52, 112, [metrics["scale"]])
 
     def _draw_card(self, painter: QPainter, x: int, y: int, w: int, h: int, title: str, value: str) -> None:
         painter.setBrush(QColor("#10182a"))
@@ -771,9 +838,10 @@ class WorkspaceShell(QWidget):
         self._append_log(tr("log.joint_panel_rebuilt", len(joint_specs)))
 
     def _apply_style(self) -> None:
-        style_path = Path(__file__).resolve().parent.parent / "assets" / "style.qss"
-        if style_path.exists():
-            self.setStyleSheet(style_path.read_text(encoding="utf-8"))
+        ThemeManager.instance().apply_to(self, persist=False)
+        self.refresh_theme_chrome()
+
+    def refresh_theme_chrome(self) -> None:
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(18)
         shadow.setOffset(0, 3)
@@ -795,7 +863,10 @@ class WorkspaceShell(QWidget):
         if not file_path:
             self._append_log(tr("log.urdf_import_cancelled"))
             return
-        path = Path(file_path)
+        self.load_urdf_path(Path(file_path))
+
+    def load_urdf_path(self, path: str | Path) -> None:
+        path = Path(path)
         self.urdf_path.setText(str(path))
         self.loaded_urdf = path
         issues = self._validate_urdf_path(path)
