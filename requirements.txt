@@ -1,1 +1,9 @@
 PySide6==6.9.2
+
+# --- geometry / mesh preprocessing (see docs/MESH_PREPROCESSING.md) ---
+# trimesh pulls numpy; scipy provides the Qhull backend used for convex hulls;
+# fast-simplification provides quadric edge-collapse decimation.
+numpy==2.4.4
+trimesh==4.12.2
+scipy==1.18.1
+fast-simplification==0.2.0

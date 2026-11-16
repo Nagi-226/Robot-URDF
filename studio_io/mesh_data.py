@@ -41,7 +41,10 @@ class MeshData:
     """
 
     vertices: np.ndarray  # N×3 float32
-    indices: np.ndarray   # M×3 uint32 (flat: M*3)
+    # M×3 uint32, **2-D**: len(indices) == triangle count (see triangle_count).
+    # (An older comment here said "flat: M*3"; the loaders never produced that,
+    #  and reading it as flat silently triples the face count.)
+    indices: np.ndarray
     normals: np.ndarray   # N×3 float32
     colors: np.ndarray | None = None  # N×3 float32, optional
     edge_indices: np.ndarray | None = None  # E×2 uint32, optional
