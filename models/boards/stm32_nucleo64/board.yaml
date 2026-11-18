@@ -1,0 +1,48 @@
+# STM32 Nucleo-64（MB1136 参考板，UM1724 适用系列）板卡数据卡。
+# 硬约束：每个数值必须有来源；查不到 = null + UNVERIFIED，不填估计值。
+board: stm32_nucleo64
+unit: m
+
+outline:
+  length: 0.08250   # 82.50mm，UM1724 Rev 17 Figure 5 总长标注
+  width: 0.07000    # 70.00mm，UM1724 Rev 17 Figure 5 总宽标注
+  thickness: null   # UNVERIFIED：UM1724 无板厚标注
+
+# Figure 5 可见 3 个安装孔（存在性有来源），但孔位/孔径 UNVERIFIED：
+# 栅格图像素测量（以排针 2.54mm pitch 标定）与图上标注 10.87/3.04/57.54 交叉验证
+# 不一致（图纵向比例与横向不一致），测量结果弃用，不填估计值。
+mount_holes:
+  - name: hole_1
+    xy: null          # UNVERIFIED
+    diameter: null    # UNVERIFIED
+  - name: hole_2
+    xy: null          # UNVERIFIED
+    diameter: null    # UNVERIFIED
+  - name: hole_3
+    xy: null          # UNVERIFIED
+    diameter: null    # UNVERIFIED
+
+camera_interface:
+  position_xyz: null        # UNVERIFIED：板上无摄像头连接器
+  suggested_pitch_deg: null # UNVERIFIED：正前方基准角由几何→阈值映射层定义（本单不做）
+  fov_deg: null             # UNVERIFIED：板上无自带摄像头模组
+
+power_and_cable:
+  usb: "ST-LINK 段端部 Mini-B USB（CN1，板载 ST-LINK/V2-1）"
+  dvp_cable_exit: null      # UNVERIFIED：无板载 DVP 连接器
+
+# 挂载点 = 模型库设计建议（约定），不是板子实测特征。
+# 坐标原点 = 外形几何中心，z=0 = 板厚中面；xy 由有来源的外形尺寸推导（长边端点/中心）。
+mount_points:
+  convention: "design-suggestion, not measured board feature"
+  mount_camera: [0.0, 0.04125, 0.0]    # +Y 长边端中心（ST-LINK 端）
+  mount_sensor: [0.0, -0.04125, 0.0]   # -Y 长边端中心（MCU target 端）
+  mount_bracket: [0.0, 0.0, 0.0]       # 板中心
+
+sources:
+  outline: "ST UM1724 Rev 17 §7.2 Mechanical dimensions, Figure 5（p16）：总宽 70.00 / 总长 82.50 mm 标注（www.st.com/resource/en/user_manual/um1724-stm32-nucleo64-boards-mb1136-stmicroelectronics.pdf）"
+  thickness: "UNVERIFIED：UM1724 Rev 17 全文无板厚标注"
+  mount_holes: "UM1724 Rev 17 Figure 5：3 个安装孔可见（存在性）；孔位/孔径 UNVERIFIED（像素测量交叉验证失败，方法：cv2 HoughCircles + 排针 2.54mm pitch 标定，与标注 10.87/3.04/57.54 不符）"
+  camera_interface: "UNVERIFIED：UM1724 Rev 17 Figure 3 顶布局无摄像头连接器"
+  power_and_cable: "UM1724 Rev 17 Figure 3（CN1 ST-LINK USB mini B）与 §7.4 Embedded ST-LINK/V2-1"
+  mount_points: "模型库约定（非来源尺寸）：xy 由 outline 推导，见 convention"

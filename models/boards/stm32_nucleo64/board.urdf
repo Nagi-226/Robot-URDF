@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- STM32 Nucleo-64（MB1136 参考板）板体近似模型（box 近似，非真实外壳网格）。
+     坐标约定：原点 = 板外形几何中心；X = 宽（70.00mm），Y = 长（82.50mm，+Y = ST-LINK 端），
+     Z 垂直板面，z=0 为板厚中面。尺寸来源见同目录 board.yaml 的 sources 段。
+     外形 70.00 x 82.50 mm 来自 ST UM1724 Rev 17 §7.2 Figure 5 标注。 -->
+<robot name="stm32_nucleo64">
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <!-- UNVERIFIED 占位：z=0.0016 是标称 PCB 厚度的绘图占位值，不是有来源的尺寸；
+             board.yaml 的 thickness 为 null。实测后替换。x/y 为有来源的外形尺寸。 -->
+        <box size="0.07 0.0825 0.0016"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </visual>
+  </link>
+
+  <!-- 三个挂载点为跨仓约定命名（PPM 导阈值按名字找），不改名不加前缀。
+       位置是模型库的设计建议（约定），不是板子实测特征：
+       camera = +Y 长边端中心（ST-LINK 端），sensor = -Y 长边端中心（MCU target 端），
+       bracket = 板中心。z=0（板厚中面约定）；rpy 中项为俯仰角槽位，当前 0 = 水平朝前占位，
+       正前方基准角由几何→阈值映射层定义（本单不做）。 -->
+  <link name="mount_camera"/>
+  <link name="mount_sensor"/>
+  <link name="mount_bracket"/>
+
+  <joint name="base_to_mount_camera" type="fixed">
+    <parent link="base_link"/>
+    <child link="mount_camera"/>
+    <origin xyz="0 0.04125 0" rpy="0 0 0"/>
+  </joint>
+  <joint name="base_to_mount_sensor" type="fixed">
+    <parent link="base_link"/>
+    <child link="mount_sensor"/>
+    <origin xyz="0 -0.04125 0" rpy="0 0 0"/>
+  </joint>
+  <joint name="base_to_mount_bracket" type="fixed">
+    <parent link="base_link"/>
+    <child link="mount_bracket"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 无 hole_N link：UM1724 Rev 17 Figure 5 可见 3 个安装孔，但孔位/孔径无法从
+       栅格图可靠换算（像素测量与图上标注 10.87/3.04/57.54 交叉验证失败，已弃用）。
+       见 board.yaml mount_holes 的 null 条目。不编造孔位。 -->
+</robot>

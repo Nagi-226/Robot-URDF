@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ESP32-S3-DevKitC-1 v1.1 板体近似模型（box 近似，非真实外壳网格）。
+     坐标约定：原点 = 板外形几何中心；X = 宽方向，Y = 长方向（+Y = 模组/天线端），
+     Z 垂直板面，z=0 为板厚中面。尺寸来源见同目录 board.yaml 的 sources 段。
+     外形 62.74 x 25.40 mm 来自乐鑫官方尺寸图 DXF 标注（已交叉验证）。 -->
+<robot name="esp32s3_devkitc">
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <!-- UNVERIFIED 占位：z=0.0016 是标称 PCB 厚度的绘图占位值，不是有来源的尺寸；
+             board.yaml 的 thickness 为 null。实测后替换。x/y 为有来源的外形尺寸。 -->
+        <box size="0.0254 0.06274 0.0016"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </visual>
+  </link>
+
+  <!-- 三个挂载点为跨仓约定命名（PPM 导阈值按名字找），不改名不加前缀。
+       位置是模型库的设计建议（约定），不是板子实测特征：
+       camera = 长边模组端中心，sensor = 长边 USB 端中心，bracket = 板中心。
+       z=0（板厚中面约定）；rpy 中项为俯仰角槽位，当前 0 = 水平朝前占位，
+       正前方基准角由几何→阈值映射层定义（本单不做）。 -->
+  <link name="mount_camera"/>
+  <link name="mount_sensor"/>
+  <link name="mount_bracket"/>
+
+  <joint name="base_to_mount_camera" type="fixed">
+    <parent link="base_link"/>
+    <child link="mount_camera"/>
+    <origin xyz="0 0.03137 0" rpy="0 0 0"/>
+  </joint>
+  <joint name="base_to_mount_sensor" type="fixed">
+    <parent link="base_link"/>
+    <child link="mount_sensor"/>
+    <origin xyz="0 -0.03137 0" rpy="0 0 0"/>
+  </joint>
+  <joint name="base_to_mount_bracket" type="fixed">
+    <parent link="base_link"/>
+    <child link="mount_bracket"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 无 hole_N link：官方尺寸图 DXF 中不存在安装孔几何（面包板兼容板，无螺丝孔）。
+       见 board.yaml mount_holes: [] 及其来源。不编造孔位。 -->
+</robot>

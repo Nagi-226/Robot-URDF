@@ -1,0 +1,37 @@
+# ESP32-S3-DevKitC-1 v1.1 板卡数据卡。
+# 硬约束：每个数值必须有来源；查不到 = null + UNVERIFIED，不填估计值。
+board: esp32s3_devkitc
+unit: m
+
+outline:
+  length: 0.06274   # 62.74mm，官方 DXF 标注
+  width: 0.02540    # 25.40mm，官方 DXF 标注
+  thickness: null   # UNVERIFIED：DXF/用户指南/原理图均无板厚标注
+
+# 官方尺寸图中无安装孔几何（面包板兼容板，无螺丝孔）→ 空列表是实测结论，不是缺数据。
+mount_holes: []
+
+camera_interface:
+  position_xyz: null        # UNVERIFIED：板上无摄像头连接器，DVP 信号经 GPIO 跳线引出
+  suggested_pitch_deg: null # UNVERIFIED：正前方基准角由几何→阈值映射层定义（本单不做）
+  fov_deg: null             # UNVERIFIED：板上无自带摄像头模组
+
+power_and_cable:
+  usb: "短边（DXF y=0 端）2x Micro-USB：USB-to-UART 桥口 + ESP32-S3 原生 USB 口"
+  dvp_cable_exit: null      # UNVERIFIED：无板载 DVP 连接器，排线出线方向不存在
+
+# 挂载点 = 模型库设计建议（约定），不是板子实测特征。
+# 坐标原点 = 外形几何中心，z=0 = 板厚中面；xy 由有来源的外形尺寸推导（长边端点/中心）。
+mount_points:
+  convention: "design-suggestion, not measured board feature"
+  mount_camera: [0.0, 0.03137, 0.0]    # +Y 长边端中心（模组/天线端）
+  mount_sensor: [0.0, -0.03137, 0.0]   # -Y 长边端中心（USB 端）
+  mount_bracket: [0.0, 0.0, 0.0]       # 板中心
+
+sources:
+  outline: "Espressif 官方尺寸图 DXF_ESP32-S3-DevKitC-1_V1.1_20220429.dxf（ESP-IDF v5.3 用户指南 Related Documents 链接）：标注 62.74mm / 25.40mm；与尺寸线几何交叉验证（宽尺寸线 x=0→25.4，长尺寸线跨度 62.738）"
+  thickness: "UNVERIFIED：DXF_ESP32-S3-DevKitC-1_V1.1_20220429.dxf、ESP-IDF v5.3 user-guide-devkitc-1.html、SCH_ESP32-S3-DevKitC-1_V1.1_20221130.pdf 均无板厚标注"
+  mount_holes: "DXF_ESP32-S3-DevKitC-1_V1.1_20220429.dxf：遍历全部闭合多段线/圆实体，无安装孔几何（0.9mm 方块为 RGB LED 焊盘，0.635mm 弧为排针焊盘）"
+  camera_interface: "ESP-IDF v5.3 ESP32-S3-DevKitC-1 v1.1 用户指南（docs.espressif.com/projects/esp-idf/en/v5.3/esp32s3/hw-reference/esp32s3/user-guide-devkitc-1.html）：组件表与 J1/J3 排针表无摄像头连接器，DVP 走 GPIO"
+  power_and_cable: "同上用户指南 Description of Components：USB-to-UART Port（Micro-USB）与 USB Port（Micro-USB）；DXF 中 J2/J4 位于 y≈0 短边"
+  mount_points: "模型库约定（非来源尺寸）：xy 由 outline 推导，见 convention"

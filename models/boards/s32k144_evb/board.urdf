@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- S32K144EVB-Q100（SCH-29248 Rev B）板体骨架模型。
+     ⚠ 本板外形尺寸 UNVERIFIED：NXP 官方机械图/原理图需登录下载，公开 QSG 只给
+     上限 "supports up to 6in x 4in"。下面 box 的 x/y 是该上限包络的占位值
+     （0.1016 x 0.1524 m = 4in x 6in，来源 QSG Rev 4.1），不是本板实测外形；
+     board.yaml 的 outline 全为 null。拿到官方机械图后替换。
+     坐标约定：原点 = 包络几何中心；X/Y 在板面内，z=0 为板厚中面。 -->
+<robot name="s32k144_evb">
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <!-- UNVERIFIED 占位：x/y = QSG 上限包络 4in x 6in（非实测外形），
+             z = 标称 PCB 厚度绘图占位值（非有来源尺寸）。board.yaml outline 全 null。 -->
+        <box size="0.1016 0.1524 0.0016"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </visual>
+  </link>
+
+  <!-- 三个挂载点为跨仓约定命名（PPM 导阈值按名字找），不改名不加前缀。
+       本板外形 UNVERIFIED → 挂载点坐标无法由外形推导，暂全部置于原点（骨架），
+       拿到官方机械图后按约定（长边端中心/板中心）回填。
+       rpy 中项为俯仰角槽位，当前 0 = 水平朝前占位。 -->
+  <link name="mount_camera"/>
+  <link name="mount_sensor"/>
+  <link name="mount_bracket"/>
+
+  <joint name="base_to_mount_camera" type="fixed">
+    <parent link="base_link"/>
+    <child link="mount_camera"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+  <joint name="base_to_mount_sensor" type="fixed">
+    <parent link="base_link"/>
+    <child link="mount_sensor"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+  <joint name="base_to_mount_bracket" type="fixed">
+    <parent link="base_link"/>
+    <child link="mount_bracket"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 无 hole_N link：本板安装孔存在性与孔位均 UNVERIFIED。
+       "Arduino UNO footprint-compatible" 仅指排针兼容（NXP 产品页），不能推出孔位；
+       UNO R3 官方孔 pattern（4x Ø3.20mm）见 board.yaml sources，但不适用于本板除非实测。 -->
+</robot>

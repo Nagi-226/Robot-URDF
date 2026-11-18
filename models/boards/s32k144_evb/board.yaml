@@ -1,0 +1,39 @@
+# S32K144EVB-Q100（SCH-29248 Rev B）板卡数据卡。
+# 硬约束：每个数值必须有来源；查不到 = null + UNVERIFIED，不填估计值。
+# 本板是 three-board 库里唯一外形全 UNVERIFIED 的：NXP 官方机械图/原理图
+# （S32K144EVB-SCH-29248-RB1）需登录下载；公开 QSG 只给上限包络。
+board: s32k144_evb
+unit: m
+
+outline:
+  length: null      # UNVERIFIED：QSG 仅 "supports up to 6in x 4in"（上限，非外形）
+  width: null       # UNVERIFIED：同上
+  thickness: null   # UNVERIFIED：无公开板厚标注
+
+mount_holes: null   # UNVERIFIED：存在性与孔位均无公开来源；UNO 排针兼容 ≠ UNO 孔位
+
+camera_interface:
+  position_xyz: null        # UNVERIFIED：板上无摄像头连接器
+  suggested_pitch_deg: null # UNVERIFIED：正前方基准角由几何→阈值映射层定义（本单不做）
+  fov_deg: null             # UNVERIFIED：板上无自带摄像头模组
+
+power_and_cable:
+  usb: "Micro-USB（OpenSDA 调试/供电口）；另有外部 5-12V 电源口"
+  dvp_cable_exit: null      # UNVERIFIED：无板载 DVP 连接器
+
+# 挂载点 = 模型库设计建议（约定）。本板外形 UNVERIFIED → 坐标暂为原点骨架，
+# 拿到官方机械图后按约定（长边端中心/板中心，z=0 板厚中面）回填。
+mount_points:
+  convention: "design-suggestion, not measured board feature; skeleton pending official drawing"
+  mount_camera: [0.0, 0.0, 0.0]   # UNVERIFIED-derived skeleton
+  mount_sensor: [0.0, 0.0, 0.0]   # UNVERIFIED-derived skeleton
+  mount_bracket: [0.0, 0.0, 0.0]  # UNVERIFIED-derived skeleton
+
+sources:
+  outline: "UNVERIFIED：S32K144EVB-QSG Rev 4.1（SCH-29248 Rev B）features 仅 'Small form factor size supports up to 6” x 4”'（上限包络）；NXP 产品页 nxp.com S32K144EVB 仅 'Arduino UNO footprint-compatible'（排针兼容）。官方机械图需 NXP 登录，未获取"
+  outline_placeholder: "URDF box 占位值 0.1016 x 0.1524 m = 4in x 6in，来源 S32K144EVB-QSG Rev 4.1 上限包络；明确标注为占位，非本板外形"
+  thickness: "UNVERIFIED：公开文档无板厚标注"
+  mount_holes: "UNVERIFIED：无公开孔位来源。参考（不适用于本板）：Arduino UNO R3 User Manual A000066 §5.4（docs.arduino.cc/resources/datasheets/A000066-datasheet.pdf p11）4x Ø3.20mm、孔距 66.04mm、偏移 15.24/2.54/17.78/45.72mm"
+  camera_interface: "UNVERIFIED：S32K144EVB-QSG Rev 4.1 组件清单无摄像头连接器"
+  power_and_cable: "S32K144EVB-QSG Rev 4.1：OpenSDA USB / External Power Supply (5-12V)；NXP 产品页 'micro USB or external 12V'"
+  mount_points: "模型库约定（非来源尺寸）：骨架坐标，见 convention"
